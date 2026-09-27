@@ -1,5 +1,5 @@
 export { APIPromise, type WithResponse } from "./api-promise";
-export { TypeSafeClient } from "./client";
+export { RuneClient } from "./client";
 export { ENV, type EnvVar } from "./env";
 export {
   APIConnectionError,
@@ -12,7 +12,7 @@ export {
   NotFoundError,
   PermissionDeniedError,
   RateLimitError,
-  TypeSafeError,
+  RuneError,
   UnprocessableEntityError,
 } from "./errors";
 export { LOG_LEVELS } from "./logging";

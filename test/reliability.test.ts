@@ -9,13 +9,13 @@ import {
   type Logger,
   RateLimitError,
   type RetryPolicy,
-  TypeSafeClient,
-  TypeSafeError,
+  RuneClient,
+  RuneError,
 } from "../src";
 import { DEFAULT_RETRY_POLICY } from "../src/retry";
 import { json, mockFetch } from "./helpers";
 
-const MODELS = [{ name: "m", description: "d", release_date: "2026" }];
+const MODELS = [{ id: "m", object: "model", created: 0, owned_by: "test" }];
 
 const infoLogger = (): Logger & { lines: string[] } => {
   const lines: string[] = [];
@@ -54,9 +54,9 @@ describe("retries", () => {
     const { fetch, requests } = mockFetch(() =>
       ++calls === 1
         ? json({}, { status: 429, headers: { "retry-after": "2" } })
-        : json({ models: MODELS }),
+        : json({ data: MODELS }),
     );
-    const client = new TypeSafeClient({ apiKey: "k", fetch, logger, logLevel: "info" });
+    const client = new RuneClient({ apiKey: "k", fetch, logger, logLevel: "info" });
 
     const p = client.models.list();
     await vi.advanceTimersByTimeAsync(1999);
@@ -75,9 +75,9 @@ describe("retries", () => {
   it("uses exponential backoff when there is no Retry-After", async () => {
     let calls = 0;
     const { fetch, requests } = mockFetch(() =>
-      ++calls <= 2 ? json({}, { status: 503 }) : json({ models: MODELS }),
+      ++calls <= 2 ? json({}, { status: 503 }) : json({ data: MODELS }),
     );
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const client = new RuneClient({ apiKey: "k", fetch });
 
     const p = client.models.list();
     await vi.advanceTimersByTimeAsync(499);
@@ -93,14 +93,14 @@ describe("retries", () => {
 
   it("gives up after maxRetries and throws the last error", async () => {
     const { fetch, requests } = mockFetch(() => json({ message: "down" }, { status: 500 }));
-    const client = new TypeSafeClient({ apiKey: "k", fetch, retry: { maxRetries: 3 } });
+    const client = new RuneClient({ apiKey: "k", fetch, retry: { maxRetries: 3 } });
     await expect(settle(client.models.list())).rejects.toBeInstanceOf(InternalServerError);
     expect(requests).toHaveLength(4);
   });
 
   it("does not retry non-retryable statuses", async () => {
     const { fetch, requests } = mockFetch(() => json({}, { status: 400 }));
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const client = new RuneClient({ apiKey: "k", fetch });
     await expect(settle(client.models.list())).rejects.toBeInstanceOf(BadRequestError);
     expect(requests).toHaveLength(1);
   });
@@ -109,9 +109,9 @@ describe("retries", () => {
     let calls = 0;
     const { fetch, requests } = mockFetch(() => {
       if (++calls === 1) throw new TypeError("fetch failed");
-      return json({ models: MODELS });
+      return json({ data: MODELS });
     });
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const client = new RuneClient({ apiKey: "k", fetch });
     expect(await settle(client.models.list())).toEqual(MODELS);
     expect(requests).toHaveLength(2);
   });
@@ -122,7 +122,7 @@ describe("retries", () => {
       ac.abort();
       throw new DOMException("aborted", "AbortError");
     });
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const client = new RuneClient({ apiKey: "k", fetch });
     await expect(settle(client.models.list({ signal: ac.signal }))).rejects.toBeInstanceOf(
       APIUserAbortError,
     );
@@ -132,7 +132,7 @@ describe("retries", () => {
   it("aborting during the backoff wait throws APIUserAbortError", async () => {
     const ac = new AbortController();
     const { fetch, requests } = mockFetch(() => json({}, { status: 503 }));
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const client = new RuneClient({ apiKey: "k", fetch });
     const p = client.models.list({ signal: ac.signal });
     const guarded = p.catch((e: unknown) => e);
     await vi.advanceTimersByTimeAsync(100);
@@ -143,7 +143,7 @@ describe("retries", () => {
 
   it("per-call maxRetries overrides the client, and 0 disables retries", async () => {
     const { fetch, requests } = mockFetch(() => json({}, { status: 503 }));
-    const client = new TypeSafeClient({ apiKey: "k", fetch, retry: { maxRetries: 5 } });
+    const client = new RuneClient({ apiKey: "k", fetch, retry: { maxRetries: 5 } });
     await expect(settle(client.models.list({ retry: { maxRetries: 0 } }))).rejects.toBeInstanceOf(
       InternalServerError,
     );
@@ -153,28 +153,24 @@ describe("retries", () => {
   it("tells the server which retry this is", async () => {
     let calls = 0;
     const { fetch, requests } = mockFetch(() =>
-      ++calls <= 2 ? json({}, { status: 503 }) : json({ models: MODELS }),
+      ++calls <= 2 ? json({}, { status: 503 }) : json({ data: MODELS }),
     );
-    await settle(new TypeSafeClient({ apiKey: "k", fetch }).models.list());
+    await settle(new RuneClient({ apiKey: "k", fetch }).models.list());
     const retryHeader = (i: number) =>
-      (requests[i]?.init?.headers as Record<string, string> | undefined)?.[
-        "X-TypeSafe-Retry-Count"
-      ];
+      (requests[i]?.init?.headers as Record<string, string> | undefined)?.["X-Rune-Retry-Count"];
     expect(retryHeader(0)).toBeUndefined();
     expect(retryHeader(1)).toBe("1");
     expect(retryHeader(2)).toBe("2");
   });
 
   it("rejects invalid maxRetries from config or per call", () => {
-    expect(() => new TypeSafeClient({ apiKey: "k", retry: { maxRetries: -1 } })).toThrow(
-      TypeSafeError,
-    );
-    expect(() => new TypeSafeClient({ apiKey: "k", retry: { maxRetries: 1.5 } })).toThrow(
+    expect(() => new RuneClient({ apiKey: "k", retry: { maxRetries: -1 } })).toThrow(RuneError);
+    expect(() => new RuneClient({ apiKey: "k", retry: { maxRetries: 1.5 } })).toThrow(
       "retry.maxRetries",
     );
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
-      fetch: mockFetch(() => json({ models: [] })).fetch,
+      fetch: mockFetch(() => json({ data: [] })).fetch,
     });
     expect(() => client.models.list({ retry: { maxRetries: -1 } })).toThrow("retry.maxRetries");
   });
@@ -193,20 +189,20 @@ describe("retry policy", () => {
   const always = (status: number) => mockFetch(() => json({}, { status }));
 
   it("defaults to the SDK policy and exposes the resolved policy on the client", () => {
-    expect(new TypeSafeClient({ apiKey: "k" }).retry).toEqual(DEFAULT_RETRY_POLICY);
-    const client = new TypeSafeClient({ apiKey: "k", retry: { maxRetries: 7, backoffJitter: 0 } });
+    expect(new RuneClient({ apiKey: "k" }).retry).toEqual(DEFAULT_RETRY_POLICY);
+    const client = new RuneClient({ apiKey: "k", retry: { maxRetries: 7, backoffJitter: 0 } });
     expect(client.retry).toEqual({ ...DEFAULT_RETRY_POLICY, maxRetries: 7, backoffJitter: 0 });
   });
 
   it("isolates the policy and status set between default clients", () => {
-    const first = new TypeSafeClient({ apiKey: "k" });
-    const second = new TypeSafeClient({ apiKey: "k" });
+    const first = new RuneClient({ apiKey: "k" });
+    const second = new RuneClient({ apiKey: "k" });
     expect(first.retry).not.toBe(second.retry);
     expect(first.retry.httpStatuses).not.toBe(second.retry.httpStatuses);
     // JavaScript callers can mutate these despite TypeScript's readonly annotations.
     Reflect.set(first.retry, "maxRetries", 0);
     (first.retry.httpStatuses as Set<number>).clear();
-    for (const client of [second, new TypeSafeClient({ apiKey: "k" })]) {
+    for (const client of [second, new RuneClient({ apiKey: "k" })]) {
       expect(client.retry.maxRetries).toBe(2);
       expect(client.retry.httpStatuses.has(503)).toBe(true);
     }
@@ -215,7 +211,7 @@ describe("retry policy", () => {
   it("copies caller-owned status sets when constructing a client", async () => {
     const statuses = new Set([503]);
     const { fetch, requests } = always(503);
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch,
       retry: { httpStatuses: statuses, maxRetries: 1 },
@@ -230,7 +226,7 @@ describe("retry policy", () => {
     async (source) => {
       const statuses = new Set([503]);
       const { fetch, requests } = always(503);
-      const client = new TypeSafeClient({
+      const client = new RuneClient({
         apiKey: "k",
         fetch,
         retry: { maxRetries: 1, httpStatuses: new Set([503]) },
@@ -247,8 +243,8 @@ describe("retry policy", () => {
   );
 
   it("can extend the default statuses by spreading the client's policy", () => {
-    const client = new TypeSafeClient({ apiKey: "k" });
-    const extended = new TypeSafeClient({
+    const client = new RuneClient({ apiKey: "k" });
+    const extended = new RuneClient({
       apiKey: "k",
       retry: { httpStatuses: new Set([...client.retry.httpStatuses, 409]) },
     });
@@ -259,7 +255,7 @@ describe("retry policy", () => {
 
   it("retries only the statuses in httpStatuses", async () => {
     const { fetch, requests } = always(409);
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch,
       retry: { httpStatuses: new Set([409]) },
@@ -268,7 +264,7 @@ describe("retry policy", () => {
     expect(requests).toHaveLength(3);
 
     const server = always(503);
-    const noServerRetries = new TypeSafeClient({
+    const noServerRetries = new RuneClient({
       apiKey: "k",
       fetch: server.fetch,
       retry: { httpStatuses: new Set([]) },
@@ -281,7 +277,7 @@ describe("retry policy", () => {
     const dropped = mockFetch(() => {
       throw new TypeError("fetch failed");
     });
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch: dropped.fetch,
       retry: { apiConnectionError: false },
@@ -297,7 +293,7 @@ describe("retry policy", () => {
           );
         }),
     );
-    const timeouts = new TypeSafeClient({
+    const timeouts = new RuneClient({
       apiKey: "k",
       fetch: hung.fetch,
       timeout: 10,
@@ -316,7 +312,7 @@ describe("retry policy", () => {
           );
         }),
     );
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch: hung.fetch,
       timeout: 10,
@@ -328,7 +324,7 @@ describe("retry policy", () => {
     const dropped = mockFetch(() => {
       throw new TypeError("fetch failed");
     });
-    const connections = new TypeSafeClient({
+    const connections = new RuneClient({
       apiKey: "k",
       fetch: dropped.fetch,
       retry: { apiTimeoutError: false, maxRetries: 1 },
@@ -340,9 +336,9 @@ describe("retry policy", () => {
   it("backs off from the configured initial delay and cap", async () => {
     let calls = 0;
     const { fetch, requests } = mockFetch(() =>
-      ++calls <= 3 ? json({}, { status: 503 }) : json({ models: MODELS }),
+      ++calls <= 3 ? json({}, { status: 503 }) : json({ data: MODELS }),
     );
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch,
       retry: { maxRetries: 3, backoffInitialMs: 100, backoffMaxMs: 150 },
@@ -364,16 +360,16 @@ describe("retry policy", () => {
     const { fetch, requests } = mockFetch(() =>
       ++calls === 1
         ? json({}, { status: 429, headers: { "retry-after": "2" } })
-        : json({ models: MODELS }),
+        : json({ data: MODELS }),
     );
-    const client = new TypeSafeClient({ apiKey: "k", fetch, retry: { respectRetryAfter: false } });
+    const client = new RuneClient({ apiKey: "k", fetch, retry: { respectRetryAfter: false } });
     const p = client.models.list();
     await vi.advanceTimersByTimeAsync(500);
     expect(requests).toHaveLength(2);
     expect(await settle(p)).toEqual(MODELS);
 
     calls = 0;
-    const capped = new TypeSafeClient({ apiKey: "k", fetch, retry: { maxRetryAfterMs: 1000 } });
+    const capped = new RuneClient({ apiKey: "k", fetch, retry: { maxRetryAfterMs: 1000 } });
     const q = capped.models.list();
     await vi.advanceTimersByTimeAsync(500);
     expect(requests).toHaveLength(4);
@@ -383,7 +379,7 @@ describe("retry policy", () => {
   it("per-call retry overrides field by field and leaves the client's policy alone", async () => {
     const logger = infoLogger();
     const { fetch, requests } = always(503);
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch,
       logger,
@@ -400,7 +396,7 @@ describe("retry policy", () => {
   });
 
   it("validates every numeric field and names it", () => {
-    const bad = (retry: Partial<RetryPolicy>) => () => new TypeSafeClient({ apiKey: "k", retry });
+    const bad = (retry: Partial<RetryPolicy>) => () => new RuneClient({ apiKey: "k", retry });
     expect(bad({ backoffInitialMs: -1 })).toThrow("retry.backoffInitialMs");
     expect(bad({ backoffMaxMs: Number.NaN })).toThrow("retry.backoffMaxMs");
     expect(bad({ backoffJitter: 1.5 })).toThrow("retry.backoffJitter");
@@ -411,9 +407,9 @@ describe("retry policy", () => {
     expect(bad({ backoffInitialMs: 0, backoffMaxMs: 0, backoffJitter: 0 })).not.toThrow();
     expect(bad({ backoffJitter: 1, maxRetryAfterMs: 0 })).not.toThrow();
     expect(bad({ maxRetryAfterMs: Number.POSITIVE_INFINITY })).toThrow("retry.maxRetryAfterMs");
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
-      fetch: mockFetch(() => json({ models: [] })).fetch,
+      fetch: mockFetch(() => json({ data: [] })).fetch,
     });
     expect(() => client.models.list({ retry: { backoffJitter: 2 } })).toThrow(
       "retry.backoffJitter",
@@ -444,7 +440,7 @@ describe("timeouts", () => {
 
   it("throws APITimeoutError, which is an APIConnectionError", async () => {
     const { fetch } = hangingFetch();
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch,
       timeout: 1000,
@@ -459,7 +455,7 @@ describe("timeouts", () => {
 
   it("fires at exactly the configured timeout", async () => {
     const { fetch, requests } = hangingFetch();
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch,
       timeout: 1000,
@@ -483,16 +479,16 @@ describe("timeouts", () => {
           );
         });
       }
-      return json({ models: MODELS });
+      return json({ data: MODELS });
     });
-    const client = new TypeSafeClient({ apiKey: "k", fetch, timeout: 1000 });
+    const client = new RuneClient({ apiKey: "k", fetch, timeout: 1000 });
     expect(await settle(client.models.list())).toEqual(MODELS);
     expect(requests).toHaveLength(2);
   });
 
   it("per-call timeout overrides the client", async () => {
     const { fetch, requests } = hangingFetch();
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch,
       timeout: 60_000,
@@ -507,7 +503,7 @@ describe("timeouts", () => {
   it("a caller abort during a hung request is reported as an abort, not a timeout", async () => {
     const ac = new AbortController();
     const { fetch } = hangingFetch();
-    const client = new TypeSafeClient({ apiKey: "k", fetch, timeout: 60_000 });
+    const client = new RuneClient({ apiKey: "k", fetch, timeout: 60_000 });
     const guarded = client.models.list({ signal: ac.signal }).catch((e: unknown) => e);
     await vi.advanceTimersByTimeAsync(10);
     ac.abort();
@@ -515,20 +511,20 @@ describe("timeouts", () => {
   });
 
   it("clears its timer after a fast response", async () => {
-    const { fetch } = mockFetch(() => json({ models: MODELS }));
-    const client = new TypeSafeClient({ apiKey: "k", fetch, timeout: 1000 });
+    const { fetch } = mockFetch(() => json({ data: MODELS }));
+    const client = new RuneClient({ apiKey: "k", fetch, timeout: 1000 });
     await client.models.list();
     expect(vi.getTimerCount()).toBe(0);
   });
 
   it("rejects invalid timeouts from config or per call", () => {
-    expect(() => new TypeSafeClient({ apiKey: "k", timeout: 0 })).toThrow("timeout");
-    expect(() => new TypeSafeClient({ apiKey: "k", timeout: Number.POSITIVE_INFINITY })).toThrow(
-      TypeSafeError,
+    expect(() => new RuneClient({ apiKey: "k", timeout: 0 })).toThrow("timeout");
+    expect(() => new RuneClient({ apiKey: "k", timeout: Number.POSITIVE_INFINITY })).toThrow(
+      RuneError,
     );
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
-      fetch: mockFetch(() => json({ models: [] })).fetch,
+      fetch: mockFetch(() => json({ data: [] })).fetch,
     });
     expect(() => client.models.list({ timeout: -5 })).toThrow("timeout");
   });
@@ -537,7 +533,7 @@ describe("timeouts", () => {
 describe("RateLimitError", () => {
   it("exposes the parsed Retry-After in milliseconds", async () => {
     const { fetch } = mockFetch(() => json({}, { status: 429, headers: { "retry-after": "7" } }));
-    const err = await new TypeSafeClient({ apiKey: "k", fetch, retry: { maxRetries: 0 } }).models
+    const err = await new RuneClient({ apiKey: "k", fetch, retry: { maxRetries: 0 } }).models
       .list()
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(RateLimitError);
@@ -546,7 +542,7 @@ describe("RateLimitError", () => {
 
   it("is undefined when the server sent no Retry-After", async () => {
     const { fetch } = mockFetch(() => json({}, { status: 429 }));
-    const err = await new TypeSafeClient({ apiKey: "k", fetch, retry: { maxRetries: 0 } }).models
+    const err = await new RuneClient({ apiKey: "k", fetch, retry: { maxRetries: 0 } }).models
       .list()
       .catch((e: unknown) => e);
     expect((err as RateLimitError).retryAfterMs).toBeUndefined();
@@ -563,36 +559,36 @@ describe("browsers", () => {
 
   it("refuses to construct in a browser by default", () => {
     pretendBrowser();
-    expect(() => new TypeSafeClient({ apiKey: "k" })).toThrow(TypeSafeError);
-    expect(() => new TypeSafeClient({ apiKey: "k" })).toThrow("dangerouslyAllowBrowser");
+    expect(() => new RuneClient({ apiKey: "k" })).toThrow(RuneError);
+    expect(() => new RuneClient({ apiKey: "k" })).toThrow("dangerouslyAllowBrowser");
   });
 
   it("constructs in a browser when explicitly allowed", () => {
     pretendBrowser();
-    expect(() => new TypeSafeClient({ apiKey: "k", dangerouslyAllowBrowser: true })).not.toThrow();
+    expect(() => new RuneClient({ apiKey: "k", dangerouslyAllowBrowser: true })).not.toThrow();
   });
 
   it("does not mistake Node for a browser", () => {
-    expect(() => new TypeSafeClient({ apiKey: "k" })).not.toThrow();
+    expect(() => new RuneClient({ apiKey: "k" })).not.toThrow();
   });
 
   it("calls the global fetch with a receiver it accepts", async () => {
     // Browser fetch throws "Illegal invocation" unless `this` is the global object (or undefined).
     const picky = vi.fn(function (this: unknown) {
       if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
-      return Promise.resolve(json({ models: MODELS }));
+      return Promise.resolve(json({ data: MODELS }));
     });
     vi.stubGlobal("fetch", picky);
-    const client = new TypeSafeClient({ apiKey: "k" });
+    const client = new RuneClient({ apiKey: "k" });
     expect(await client.models.list()).toEqual(MODELS);
     expect(picky).toHaveBeenCalledOnce();
   });
 
   it("fails clearly when no fetch exists and none was provided", () => {
     vi.stubGlobal("fetch", undefined);
-    expect(() => new TypeSafeClient({ apiKey: "k" })).toThrow("No global `fetch`");
+    expect(() => new RuneClient({ apiKey: "k" })).toThrow("No global `fetch`");
     expect(
-      () => new TypeSafeClient({ apiKey: "k", fetch: mockFetch(() => json({ models: [] })).fetch }),
+      () => new RuneClient({ apiKey: "k", fetch: mockFetch(() => json({ data: [] })).fetch }),
     ).not.toThrow();
   });
 });

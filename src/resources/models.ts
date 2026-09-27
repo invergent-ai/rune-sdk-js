@@ -1,6 +1,6 @@
 import type { APIPromise } from "../api-promise";
 import type { Transport } from "../client";
-import { TypeSafeError } from "../errors";
+import { RuneError } from "../errors";
 import type { ModelCard, RequestOptions } from "../types";
 
 /** Access to the Models API resource. */
@@ -18,11 +18,9 @@ export class Models {
 }
 
 /** Model list response from `GET /v1/models`. */
-type ModelsWire = { models: ModelCard[] };
+type ModelsWire = { data: ModelCard[] };
 
 const unwrapModels = (wire: ModelsWire): ModelCard[] => {
-  if (Array.isArray(wire?.models)) return wire.models;
-  throw new TypeSafeError(
-    "Unexpected response shape from GET /v1/models; expected { models: [...] }.",
-  );
+  if (Array.isArray(wire?.data)) return wire.data;
+  throw new RuneError("Unexpected response shape from GET /v1/models; expected { data: [...] }.");
 };

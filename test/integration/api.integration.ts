@@ -5,14 +5,14 @@ import {
   BadRequestError,
   choice,
   ENV,
+  NotFoundError,
   noul,
+  RuneClient,
+  RuneError,
   score,
-  TypeSafeClient,
-  TypeSafeError,
-  UnprocessableEntityError,
 } from "../../src";
 
-/** Live API tests with raw response output; skipped unless `TYPESAFE_API_KEY` is set. */
+/** Live API tests with raw response output; skipped unless `RUNE_API_KEY` is set. */
 const describeLive = process.env[ENV.apiKey] ? describe : describe.skip;
 
 const show = (label: string, value: unknown): void => {
@@ -23,7 +23,11 @@ const sum = (values: Record<string, number>): number =>
   Object.values(values).reduce((a, b) => a + b, 0);
 
 describeLive("live API", () => {
-  const client = new TypeSafeClient({ logLevel: "info", timeout: 120_000 });
+  const client = new RuneClient({
+    apiKey: process.env[ENV.apiKey] ?? "integration-tests-skipped",
+    logLevel: "info",
+    timeout: 120_000,
+  });
 
   const ticket = {
     subject: "Charged twice this month",
@@ -33,20 +37,20 @@ describeLive("live API", () => {
   it("lists models", async () => {
     const { data: models, requestId } = await client.models.list().withResponse();
     show("GET /v1/models", { requestId, count: models.length, first: models[0] });
-    expect(requestId).toMatch(/^req_/);
+    if (requestId !== undefined) expect(typeof requestId).toBe("string");
 
     expect(Array.isArray(models)).toBe(true);
     expect(models.length).toBeGreaterThan(0);
     for (const m of models) {
-      expect(typeof m.name).toBe("string");
-      expect(typeof m.description).toBe("string");
-      expect(typeof m.release_date).toBe("string");
+      expect(typeof m.id).toBe("string");
+      expect(typeof m.owned_by).toBe("string");
+      expect(typeof m.created).toBe("number");
     }
   });
 
   it("answers noul, choice, and score-as-list questions", async () => {
     const { data, requestId } = await client
-      .systemOne({
+      .decide({
         state: ticket,
         questions: {
           isBilling: noul("Is this ticket about billing?"),
@@ -59,7 +63,7 @@ describeLive("live API", () => {
         },
       })
       .withResponse();
-    show("POST /v1/systemone", { requestId, data });
+    show("POST /v1/decisions", { requestId, data });
 
     expect(typeof data.model).toBe("string");
     expect(data.usage.input_tokens).toBeGreaterThan(0);
@@ -85,7 +89,7 @@ describeLive("live API", () => {
   });
 
   it("accepts rich descriptions and one-sided noul criteria", async () => {
-    const data = await client.systemOne({
+    const data = await client.decide({
       state: ticket,
       questions: {
         duplicate: noul("Is the customer reporting a duplicate charge?", {
@@ -103,9 +107,8 @@ describeLive("live API", () => {
   });
 
   it("rejects a bad API key with AuthenticationError", async () => {
-    const bad = new TypeSafeClient({
+    const bad = new RuneClient({
       apiKey: "not-a-real-key",
-      retry: { maxRetries: 0 },
       logLevel: "off",
     });
     const err = await bad.models.list().catch((e: unknown) => e);
@@ -113,36 +116,35 @@ describeLive("live API", () => {
     expect(err).toBeInstanceOf(AuthenticationError);
   });
 
-  it("rejects an unknown model with a readable BadRequestError", async () => {
+  it("rejects an unknown model with a readable NotFoundError", async () => {
     const err = await client
-      .systemOne(
-        { state: "hello", questions: { q: noul("Is this a greeting?") }, model: "no-such-model" },
-        { retry: { maxRetries: 0 } },
-      )
+      .decide({
+        state: "hello",
+        questions: { q: noul("Is this a greeting?") },
+        model: "no-such-model",
+      })
       .catch((e: unknown) => e);
     show("unknown model", { name: (err as Error).name, message: (err as Error).message });
-    expect(err).toBeInstanceOf(BadRequestError);
-    expect((err as APIError).message).toBe("400 Unknown model: no-such-model");
-    expect((err as APIError).requestId).toMatch(/^req_/);
+    expect(err).toBeInstanceOf(NotFoundError);
+    expect((err as APIError).status).toBe(404);
+    expect((err as APIError).message).toMatch(/model/i);
   });
 
   it("surfaces server-side validation errors readably", async () => {
-    // A description type the SDK does not validate but the API rejects, to see how a 422 renders.
-    const malformed = { q: score("?", [123 as unknown as string, "ok"]) };
-    const err = await client
-      .systemOne({ state: "x", questions: malformed }, { retry: { maxRetries: 0 } })
-      .catch((e: unknown) => e);
-    show("422", { name: (err as Error).name, message: (err as Error).message });
-    expect(err).toBeInstanceOf(UnprocessableEntityError);
-    expect((err as Error).message).toMatch(/^422 questions\.q\.score\.criteria\.0/);
+    // Rune requires at least two choice options.
+    const malformed = { q: choice("?", { only: "One option" }) };
+    const err = await client.decide({ state: "x", questions: malformed }).catch((e: unknown) => e);
+    show("400", { name: (err as Error).name, message: (err as Error).message });
+    expect(err).toBeInstanceOf(BadRequestError);
+    expect((err as APIError).status).toBe(400);
   });
 
   it("catches shapes the API would reject before sending", () => {
-    expect(() => client.systemOne({ state: "x", questions: {} })).toThrow(TypeSafeError);
+    expect(() => client.decide({ state: "x", questions: {} })).toThrow(RuneError);
     // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed, as a JS caller might send
     const empty: any = [];
-    expect(() => client.systemOne({ state: "x", questions: { q: score("?", empty) } })).toThrow(
-      TypeSafeError,
+    expect(() => client.decide({ state: "x", questions: { q: score("?", empty) } })).toThrow(
+      RuneError,
     );
   });
 });

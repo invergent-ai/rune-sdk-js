@@ -7,15 +7,15 @@ import {
   NotFoundError,
   PermissionDeniedError,
   RateLimitError,
-  TypeSafeClient,
-  TypeSafeError,
+  RuneClient,
+  RuneError,
   UnprocessableEntityError,
 } from "../src";
 import { json, mockFetch } from "./helpers";
 
 // Retries are off here: these tests reuse one Response, and a retry would find its body consumed.
 const clientReturning = (res: Response) =>
-  new TypeSafeClient({ apiKey: "k", fetch: mockFetch(() => res).fetch, retry: { maxRetries: 0 } });
+  new RuneClient({ apiKey: "k", fetch: mockFetch(() => res).fetch, retry: { maxRetries: 0 } });
 
 describe("APIError.fromResponse", () => {
   it.each([
@@ -32,7 +32,7 @@ describe("APIError.fromResponse", () => {
     const err = APIError.fromResponse(status, undefined, new Headers());
     expect(err).toBeInstanceOf(cls);
     expect(err).toBeInstanceOf(APIError);
-    expect(err).toBeInstanceOf(TypeSafeError);
+    expect(err).toBeInstanceOf(RuneError);
     expect(err).toBeInstanceOf(Error);
     expect(err.name).toBe(cls.name);
     expect(err.status).toBe(status);
@@ -43,7 +43,7 @@ describe("error messages and bodies", () => {
   it("uses error.message from a JSON body and exposes the request id", async () => {
     const res = json(
       { error: { message: "invalid api key" } },
-      { status: 401, headers: { "x-typesafe-request-id": "req_123" } },
+      { status: 401, headers: { "x-request-id": "req_123" } },
     );
     const err = await clientReturning(res)
       .models.list()
@@ -53,7 +53,7 @@ describe("error messages and bodies", () => {
     expect(apiErr.message).toBe("401 invalid api key");
     expect(apiErr.requestId).toBe("req_123");
     expect(apiErr.body).toEqual({ error: { message: "invalid api key" } });
-    expect(apiErr.headers.get("x-typesafe-request-id")).toBe("req_123");
+    expect(apiErr.headers.get("x-request-id")).toBe("req_123");
   });
 
   it.each([

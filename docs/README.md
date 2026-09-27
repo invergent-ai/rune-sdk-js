@@ -1,4 +1,4 @@
-# Generate the API reference
+# Invergent Rune API reference
 
 From the SDK source checkout, run:
 

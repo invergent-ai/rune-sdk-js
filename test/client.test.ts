@@ -6,10 +6,10 @@ import {
   ENV,
   noul,
   type Questions,
+  RuneClient,
+  type RuneClientConfig,
+  RuneError,
   score,
-  TypeSafeClient,
-  type TypeSafeClientConfig,
-  TypeSafeError,
   VERSION,
 } from "../src";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL } from "../src/client";
@@ -19,20 +19,20 @@ import { describeRuntime } from "../src/runtime";
 import { json, mockFetch } from "./helpers";
 
 /** Read the API key from an outgoing request. */
-const sentApiKey = async (config: TypeSafeClientConfig = {}): Promise<string | undefined> => {
-  const { fetch, requests } = mockFetch(() => json({ models: [] }));
-  await new TypeSafeClient({ ...config, fetch }).models.list();
+const sentApiKey = async (config: RuneClientConfig = {}): Promise<string | undefined> => {
+  const { fetch, requests } = mockFetch(() => json({ data: [] }));
+  await new RuneClient({ ...config, fetch }).models.list();
   const headers = requests[0]?.init?.headers as Record<string, string> | undefined;
   return headers?.Authorization?.replace(/^Bearer /, "");
 };
 
-const SYSTEM_ONE_RESPONSE = {
+const DECISIONS_RESPONSE = {
   model: "m",
   answers: { q1: { type: "noul", noul: 0.5 } },
   usage: { input_tokens: 1, output_tokens: 1 },
 };
 
-describe("TypeSafeClient configuration", () => {
+describe("RuneClient configuration", () => {
   const savedEnv = { ...process.env };
   beforeEach(() => {
     for (const name of Object.values(ENV)) delete process.env[name];
@@ -42,7 +42,7 @@ describe("TypeSafeClient configuration", () => {
   });
 
   it("falls back to defaults when neither config nor env is set", () => {
-    const client = new TypeSafeClient({ apiKey: "k" });
+    const client = new RuneClient({ apiKey: "k" });
     expect(client.baseURL).toBe(DEFAULT_BASE_URL);
     expect(client.defaultModel).toBe(DEFAULT_MODEL);
     expect(client.logLevel).toBe(DEFAULT_LOG_LEVEL);
@@ -55,7 +55,7 @@ describe("TypeSafeClient configuration", () => {
     process.env[ENV.baseURL] = "https://env.test";
     process.env[ENV.defaultModel] = "env-model";
     process.env[ENV.logLevel] = "debug";
-    const client = new TypeSafeClient();
+    const client = new RuneClient();
     await expect(sentApiKey()).resolves.toBe("env-key");
     expect(client.baseURL).toBe("https://env.test");
     expect(client.defaultModel).toBe("env-model");
@@ -67,7 +67,7 @@ describe("TypeSafeClient configuration", () => {
     process.env[ENV.baseURL] = "https://env.test";
     process.env[ENV.defaultModel] = "env-model";
     process.env[ENV.logLevel] = "debug";
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "code-key",
       baseURL: "https://code.test",
       defaultModel: "code-model",
@@ -80,7 +80,7 @@ describe("TypeSafeClient configuration", () => {
   });
 
   it("keeps the API key off the instance so logging the client cannot leak it", () => {
-    const client = new TypeSafeClient({ apiKey: "super-secret" });
+    const client = new RuneClient({ apiKey: "super-secret" });
     expect("apiKey" in client).toBe(false);
     expect(Object.values(client)).not.toContain("super-secret");
     expect(JSON.stringify(client)).not.toContain("super-secret");
@@ -91,38 +91,38 @@ describe("TypeSafeClient configuration", () => {
     process.env[ENV.baseURL] = "   ";
     process.env[ENV.defaultModel] = "";
     process.env[ENV.logLevel] = "";
-    const client = new TypeSafeClient();
+    const client = new RuneClient();
     expect(client.baseURL).toBe(DEFAULT_BASE_URL);
     expect(client.defaultModel).toBe(DEFAULT_MODEL);
     expect(client.logLevel).toBe(DEFAULT_LOG_LEVEL);
   });
 
-  it("throws a TypeSafeError naming the env var when no API key is available", () => {
-    expect(() => new TypeSafeClient()).toThrow(TypeSafeError);
-    expect(() => new TypeSafeClient()).toThrow(ENV.apiKey);
+  it("throws a RuneError naming the env var when no API key is available", () => {
+    expect(() => new RuneClient()).toThrow(RuneError);
+    expect(() => new RuneClient()).toThrow(ENV.apiKey);
   });
 
   it("strips trailing slashes from baseURL from either source", () => {
     process.env[ENV.baseURL] = "https://example.test///";
-    expect(new TypeSafeClient({ apiKey: "k" }).baseURL).toBe("https://example.test");
-    expect(new TypeSafeClient({ apiKey: "k", baseURL: "https://x.test/" }).baseURL).toBe(
+    expect(new RuneClient({ apiKey: "k" }).baseURL).toBe("https://example.test");
+    expect(new RuneClient({ apiKey: "k", baseURL: "https://x.test/" }).baseURL).toBe(
       "https://x.test",
     );
   });
 
   it.each(LOG_LEVELS)("accepts log level %s", (level) => {
-    expect(new TypeSafeClient({ apiKey: "k", logLevel: level }).logLevel).toBe(level);
+    expect(new RuneClient({ apiKey: "k", logLevel: level }).logLevel).toBe(level);
     process.env[ENV.logLevel] = level;
-    expect(new TypeSafeClient({ apiKey: "k" }).logLevel).toBe(level);
+    expect(new RuneClient({ apiKey: "k" }).logLevel).toBe(level);
   });
 
   it("rejects an invalid log level and names where it came from", () => {
     process.env[ENV.logLevel] = "loud";
-    expect(() => new TypeSafeClient({ apiKey: "k" })).toThrow(TypeSafeError);
-    expect(() => new TypeSafeClient({ apiKey: "k" })).toThrow(`"loud" from ${ENV.logLevel}`);
-    expect(() => new TypeSafeClient({ apiKey: "k" })).toThrow(LOG_LEVELS.join(", "));
+    expect(() => new RuneClient({ apiKey: "k" })).toThrow(RuneError);
+    expect(() => new RuneClient({ apiKey: "k" })).toThrow(`"loud" from ${ENV.logLevel}`);
+    expect(() => new RuneClient({ apiKey: "k" })).toThrow(LOG_LEVELS.join(", "));
     // biome-ignore lint/suspicious/noExplicitAny: deliberately bypassing the type to mimic a JS caller
-    expect(() => new TypeSafeClient({ apiKey: "k", logLevel: "loud" as any })).toThrow(
+    expect(() => new RuneClient({ apiKey: "k", logLevel: "loud" as any })).toThrow(
       "the `logLevel` option",
     );
   });
@@ -130,8 +130,8 @@ describe("TypeSafeClient configuration", () => {
 
 describe("requests", () => {
   it("sends auth and identifying headers", async () => {
-    const { fetch, requests } = mockFetch(() => json({ models: [] }));
-    const client = new TypeSafeClient({ apiKey: "secret", baseURL: "https://x.test", fetch });
+    const { fetch, requests } = mockFetch(() => json({ data: [] }));
+    const client = new RuneClient({ apiKey: "secret", baseURL: "https://x.test", fetch });
     await client.models.list();
 
     expect(requests).toHaveLength(1);
@@ -139,16 +139,16 @@ describe("requests", () => {
     expect(requests[0]?.init?.method).toBe("GET");
     const headers = requests[0]?.init?.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer secret");
-    expect(headers["User-Agent"]).toBe(`typesafe-sdk/${VERSION}`);
-    expect(headers["X-TypeSafe-SDK"]).toBe(`typesafe-sdk/${VERSION}`);
-    expect(headers["X-TypeSafe-Runtime"]).toBe(describeRuntime());
-    expect(headers["X-TypeSafe-Runtime"]).toMatch(/^node\/\d+\.\d+\.\d+ \(\w+; \w+\)$/);
+    expect(headers["User-Agent"]).toBe(`rune-sdk/${VERSION}`);
+    expect(headers["X-Rune-SDK"]).toBe(`rune-sdk/${VERSION}`);
+    expect(headers["X-Rune-Runtime"]).toBe(describeRuntime());
+    expect(headers["X-Rune-Runtime"]).toMatch(/^node\/\d+\.\d+\.\d+ \(\w+; \w+\)$/);
     expect(headers["Content-Type"]).toBeUndefined();
   });
 
   it("merges defaultHeaders and per-call headers, per-call winning, never clobbering auth", async () => {
-    const { fetch, requests } = mockFetch(() => json({ models: [] }));
-    const client = new TypeSafeClient({
+    const { fetch, requests } = mockFetch(() => json({ data: [] }));
+    const client = new RuneClient({
       apiKey: "secret",
       fetch,
       defaultHeaders: { "X-Trace": "client", "X-Only-Default": "yes", Authorization: "nope" },
@@ -161,11 +161,11 @@ describe("requests", () => {
     expect(headers.Authorization).toBe("Bearer secret");
   });
 
-  it.each([{ cards: [] }, { cards: [{ name: "m", description: "d", release_date: "2026" }] }])(
+  it.each([{ cards: [] }, { cards: [{ id: "m", object: "model", created: 0, owned_by: "test" }] }])(
     "models.list() unwraps the documented response: %j",
     async ({ cards }) => {
-      const { fetch } = mockFetch(() => json({ models: cards }));
-      const client = new TypeSafeClient({ apiKey: "k", fetch });
+      const { fetch } = mockFetch(() => json({ data: cards }));
+      const client = new RuneClient({ apiKey: "k", fetch });
       expect(await client.models.list()).toEqual(cards);
       const { data, response } = await client.models.list().withResponse();
       expect(data).toEqual(cards);
@@ -174,57 +174,71 @@ describe("requests", () => {
   );
 
   it.each(
-    [null, [], { models: { models: [] } }, { models: null }, { models: "bad" }, { ok: true }].map(
+    [null, [], { data: { data: [] } }, { data: null }, { data: "bad" }, { ok: true }].map(
       (wire) => ({ wire }),
     ),
   )("models.list() fails clearly on an unrecognized shape: %j", async ({ wire }) => {
     const { fetch } = mockFetch(() => json(wire));
-    await expect(new TypeSafeClient({ apiKey: "k", fetch }).models.list()).rejects.toThrow(
+    await expect(new RuneClient({ apiKey: "k", fetch }).models.list()).rejects.toThrow(
       "Unexpected response shape from GET /v1/models",
     );
   });
 
   it("preserves employee-only model fields through raw access", async () => {
     const wire = {
-      models: [{ name: "m", description: "d", release_date: "2026", tags: ["internal"] }],
+      data: [{ id: "m", object: "model", created: 0, owned_by: "test", tags: ["internal"] }],
     };
     const { fetch } = mockFetch(() => json(wire));
-    const raw = await new TypeSafeClient({ apiKey: "k", fetch }).models.list().asResponse();
+    const raw = await new RuneClient({ apiKey: "k", fetch }).models.list().asResponse();
     expect(raw.bodyUsed).toBe(false);
     expect(await raw.json()).toEqual(wire);
   });
 
-  it("posts the systemOne payload with the default model", async () => {
-    const { fetch, requests } = mockFetch(() => json(SYSTEM_ONE_RESPONSE));
-    const client = new TypeSafeClient({ apiKey: "k", baseURL: "https://x.test", fetch });
-    const result = await client.systemOne({ state: { a: 1 }, questions: { q1: noul("x") } });
+  it("posts the decide payload with the default model", async () => {
+    const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
+    const client = new RuneClient({ apiKey: "k", baseURL: "https://x.test", fetch });
+    const result = await client.decide({ state: { a: 1 }, questions: { q1: noul("x") } });
 
-    expect(requests[0]?.url).toBe("https://x.test/v1/systemone");
+    expect(requests[0]?.url).toBe("https://x.test/v1/decisions");
     expect(requests[0]?.init?.method).toBe("POST");
     expect(requests[0]?.body).toEqual({
       state: { a: 1 },
       model: DEFAULT_MODEL,
-      questions: { q1: { type: "noul", instructions: "x", criteria: undefined } },
+      questions: {
+        q1: { type: "noul", instructions: "x", criteria: { true: "true", false: "false" } },
+      },
     });
     expect(result.answers.q1.noul).toBe(0.5);
   });
 
   it("sends the request object as the payload, filling in the default model", async () => {
-    const { fetch, requests } = mockFetch(() => json(SYSTEM_ONE_RESPONSE));
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
+    const client = new RuneClient({ apiKey: "k", fetch });
     const request = { state: { a: 1 }, questions: { q1: noul("x") } };
-    await client.systemOne(request);
-    expect(requests[0]?.body).toEqual({ ...request, model: DEFAULT_MODEL });
+    await client.decide(request);
+    expect(requests[0]?.body).toEqual({
+      ...request,
+      model: DEFAULT_MODEL,
+      questions: {
+        q1: { type: "noul", instructions: "x", criteria: { true: "true", false: "false" } },
+      },
+    });
     // Passing the same object with `model` set sends it byte-for-byte.
-    await client.systemOne({ ...request, model: "explicit" });
-    expect(requests[1]?.body).toEqual({ ...request, model: "explicit" });
+    await client.decide({ ...request, model: "explicit" });
+    expect(requests[1]?.body).toEqual({
+      ...request,
+      model: "explicit",
+      questions: {
+        q1: { type: "noul", instructions: "x", criteria: { true: "true", false: "false" } },
+      },
+    });
   });
 
   it("honors per-call model and client defaultModel", async () => {
-    const { fetch, requests } = mockFetch(() => json(SYSTEM_ONE_RESPONSE));
-    const client = new TypeSafeClient({ apiKey: "k", fetch, defaultModel: "client-default" });
-    await client.systemOne({ state: "s", questions: { q: choice("c", { a: null }) } });
-    await client.systemOne({
+    const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
+    const client = new RuneClient({ apiKey: "k", fetch, defaultModel: "client-default" });
+    await client.decide({ state: "s", questions: { q: choice("c", { a: null }) } });
+    await client.decide({
       state: "s",
       questions: { q: choice("c", { a: null }) },
       model: "per-call",
@@ -239,7 +253,7 @@ describe("requests", () => {
       ac.abort();
       throw new DOMException("aborted", "AbortError");
     });
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const client = new RuneClient({ apiKey: "k", fetch });
     await expect(client.models.list({ signal: ac.signal })).rejects.toBeInstanceOf(
       APIUserAbortError,
     );
@@ -251,7 +265,7 @@ describe("requests", () => {
     const { fetch } = mockFetch(() => {
       throw boom;
     });
-    const client = new TypeSafeClient({ apiKey: "k", fetch, retry: { maxRetries: 0 } });
+    const client = new RuneClient({ apiKey: "k", fetch, retry: { maxRetries: 0 } });
     const err = await client.models.list().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(APIConnectionError);
     expect((err as APIConnectionError).cause).toBe(boom);
@@ -272,7 +286,7 @@ describe("question builders", () => {
     expect(() => {
       // @ts-expect-error exercise plain JavaScript input
       choice("q", ["a", "b"]);
-    }).toThrow(TypeSafeError);
+    }).toThrow(RuneError);
   });
 
   it("noul allows describing one side, both, or neither", () => {
@@ -303,7 +317,7 @@ describe("question builders", () => {
         usage: { input_tokens: 1, output_tokens: 1 },
       }),
     );
-    const r = await new TypeSafeClient({ apiKey: "k", fetch }).systemOne({
+    const r = await new RuneClient({ apiKey: "k", fetch }).decide({
       state: "s",
       questions: {
         q: choice("q", { a: null, b: null }),
@@ -322,20 +336,29 @@ describe("question builders", () => {
 });
 
 describe("wire format", () => {
-  it("preserves null state, instructions, and criteria values", async () => {
-    const { fetch, requests } = mockFetch(() => json(SYSTEM_ONE_RESPONSE));
+  it("materializes question defaults and preserves nested null state", async () => {
+    const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
     const questions = {
       noul: noul(null, { true: null, false: null }),
       noCriteria: noul(null, null),
       choice: choice(null, { yes: null, no: null }),
       score: score(null, [null, "high"]),
     };
-    await new TypeSafeClient({ apiKey: "k", fetch }).systemOne({ state: null, questions });
-    expect(requests[0]?.body).toEqual({ model: DEFAULT_MODEL, state: null, questions });
+    await new RuneClient({ apiKey: "k", fetch }).decide({ state: { nested: null }, questions });
+    expect(requests[0]?.body).toEqual({
+      model: DEFAULT_MODEL,
+      state: { nested: null },
+      questions: {
+        noul: { type: "noul", instructions: "", criteria: { true: "true", false: "false" } },
+        noCriteria: { type: "noul", instructions: "", criteria: { true: "true", false: "false" } },
+        choice: { type: "choice", instructions: "", criteria: { yes: "yes", no: "no" } },
+        score: { type: "score", instructions: "", criteria: ["0", "high"] },
+      },
+    });
   });
 
   it("allows omitted instructions and preserves JSON arrays", async () => {
-    const { fetch, requests } = mockFetch(() => json(SYSTEM_ONE_RESPONSE));
+    const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
     const questions = {
       noul: { type: "noul", criteria: null },
       choice: { type: "choice", criteria: { yes: [null, { example: true }] } },
@@ -344,29 +367,40 @@ describe("wire format", () => {
       defaultInstructions: noul(),
     } satisfies Questions;
     const state = [null, { messages: ["hello"] }];
-    await new TypeSafeClient({ apiKey: "k", fetch }).systemOne({ state, questions });
+    await new RuneClient({ apiKey: "k", fetch }).decide({ state, questions });
     expect(requests[0]?.body).toEqual({
       model: DEFAULT_MODEL,
       state,
       questions: {
-        ...questions,
-        defaultInstructions: { type: "noul", instructions: null },
+        noul: { type: "noul", instructions: "", criteria: { true: "true", false: "false" } },
+        choice: { type: "choice", instructions: "", criteria: { yes: [null, { example: true }] } },
+        score: { type: "score", instructions: "", criteria: [[null, "low"], "1"] },
+        arrayInstructions: {
+          type: "noul",
+          instructions: [null, { examples: [1, false] }],
+          criteria: { true: ["yes", null], false: "false" },
+        },
+        defaultInstructions: {
+          type: "noul",
+          instructions: "",
+          criteria: { true: "true", false: "false" },
+        },
       },
     });
   });
 
   const send = async (questions: Questions) => {
-    const { fetch, requests } = mockFetch(() => json(SYSTEM_ONE_RESPONSE));
-    await new TypeSafeClient({ apiKey: "k", fetch }).systemOne({ state: "s", questions });
+    const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
+    await new RuneClient({ apiKey: "k", fetch }).decide({ state: "s", questions });
     const body = requests[0]?.body as
       | { questions: Record<string, { criteria: unknown }> }
       | undefined;
     return body?.questions ?? {};
   };
 
-  it("sends choice criteria without rewriting", async () => {
+  it("fills unspecified choice descriptions with their labels", async () => {
     const wire = await send({ q: choice("which?", { a: null, b: null }) });
-    expect(wire.q?.criteria).toEqual({ a: null, b: null });
+    expect(wire.q?.criteria).toEqual({ a: "a", b: "b" });
   });
 
   it("sends a score list untouched", async () => {
@@ -375,12 +409,12 @@ describe("wire format", () => {
   });
 
   it("rejects non-list score criteria, fewer than two criteria, and empty question sets before sending", async () => {
-    const { fetch, requests } = mockFetch(() => json(SYSTEM_ONE_RESPONSE));
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
+    const client = new RuneClient({ apiKey: "k", fetch });
     // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed, as a JS caller might send
     const bad = (criteria: any) =>
-      client.systemOne({ state: "s", questions: { q: { type: "score", criteria } } });
-    expect(() => bad({ 0: "bad", 1: "ok" })).toThrow(TypeSafeError);
+      client.decide({ state: "s", questions: { q: { type: "score", criteria } } });
+    expect(() => bad({ 0: "bad", 1: "ok" })).toThrow(RuneError);
     expect(() => bad({ 0: "bad", 1: "ok" })).toThrow(
       'Score question "q" has criteria that are not a list',
     );
@@ -388,7 +422,7 @@ describe("wire format", () => {
       'Score question "q" has 0 criteria; at least two scores are required.',
     );
     expect(() => bad(["only"])).toThrow("at least two scores");
-    expect(() => client.systemOne({ state: "s", questions: {} })).toThrow(
+    expect(() => client.decide({ state: "s", questions: {} })).toThrow(
       "At least one question is required",
     );
     expect(requests).toHaveLength(0);
@@ -396,32 +430,30 @@ describe("wire format", () => {
 });
 
 describe("1.0 primitive contract", () => {
-  it("uses a ten-second default and keeps raw metadata access", async () => {
+  it("uses a configurable two-minute default and keeps raw metadata access", async () => {
     const { fetch, requests } = mockFetch(() =>
-      json(SYSTEM_ONE_RESPONSE, { headers: { "x-typesafe-request-id": "req_1" } }),
+      json(DECISIONS_RESPONSE, { headers: { "x-request-id": "req_1" } }),
     );
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
-    expect(client.timeout).toBe(10000);
-    const result = await client
-      .systemOne({ state: "s", questions: { q1: noul("?") } })
-      .withResponse();
-    expect(result.data).toEqual(SYSTEM_ONE_RESPONSE);
+    const client = new RuneClient({ apiKey: "k", fetch });
+    expect(client.timeout).toBe(120000);
+    const result = await client.decide({ state: "s", questions: { q1: noul("?") } }).withResponse();
+    expect(result.data).toEqual(DECISIONS_RESPONSE);
     expect(result.requestId).toBe("req_1");
     expect(requests).toHaveLength(1);
   });
 
   it("forwards extra fields and null", async () => {
-    const { fetch, requests } = mockFetch(() => json(SYSTEM_ONE_RESPONSE));
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
+    const client = new RuneClient({ apiKey: "k", fetch });
     const request = {
       state: "s",
       questions: { q: score("?", ["low", "high"]) },
       future_option: null,
       nested: { enabled: true },
     };
-    await client.systemOne(request);
-    expect(requests[0]?.body).toEqual({ ...request, model: "jev-latest" });
-    await client.systemOne({ state: "s", questions: { q: noul("?") } });
+    await client.decide(request);
+    expect(requests[0]?.body).toEqual({ ...request, model: "rune-v3" });
+    await client.decide({ state: "s", questions: { q: noul("?") } });
     expect(requests[1]?.body).not.toHaveProperty("future_option");
   });
 });

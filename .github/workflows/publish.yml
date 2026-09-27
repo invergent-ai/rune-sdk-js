@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.repository == 'typesafe-ai/typesafe-sdk-js'
+    if: github.repository == 'invergent-ai/rune-sdk-js'
     runs-on: ubuntu-latest
     environment: npm
     permissions:

@@ -2,7 +2,7 @@ import { requestIdFrom } from "./api-promise";
 import { parseRetryAfter } from "./retry";
 
 /** Base class for SDK errors. */
-export class TypeSafeError extends Error {
+export class RuneError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = new.target.name;
@@ -39,14 +39,14 @@ const describeValidationErrors = (errors: unknown[]): string | undefined => {
 const MAX_RAW_BODY_IN_MESSAGE = 200;
 
 /** An unsuccessful HTTP response from the API. */
-export class APIError extends TypeSafeError {
+export class APIError extends RuneError {
   /** HTTP response status code. */
   readonly status: number;
   /** HTTP response headers. */
   readonly headers: Headers;
   /** Parsed JSON, response text, or `undefined` for an empty body. */
   readonly body: unknown;
-  /** Request ID from `x-typesafe-request-id`, or `undefined` when absent. */
+  /** Request ID from `x-request-id`, or `undefined` when absent. */
   readonly requestId: string | undefined;
 
   constructor(status: number, body: unknown, headers: Headers, message?: string) {
@@ -97,7 +97,7 @@ export class RateLimitError extends APIError {
 export class InternalServerError extends APIError {}
 
 /** The request or response-body delivery failed (DNS, TLS, connection closed, etc.). */
-export class APIConnectionError extends TypeSafeError {
+export class APIConnectionError extends RuneError {
   constructor(message = "Connection error.", options?: ErrorOptions) {
     super(message, options);
   }
@@ -115,7 +115,7 @@ export class APITimeoutError extends APIConnectionError {
 }
 
 /** The caller cancelled the request through an `AbortSignal`. */
-export class APIUserAbortError extends TypeSafeError {
+export class APIUserAbortError extends RuneError {
   constructor(message = "Request was aborted.", options?: ErrorOptions) {
     super(message, options);
   }

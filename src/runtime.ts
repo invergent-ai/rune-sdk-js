@@ -17,7 +17,7 @@ export const isBrowser = (): boolean =>
   typeof g.window.document !== "undefined" &&
   typeof g.navigator !== "undefined";
 
-/** Runtime name, version, and platform for the `X-TypeSafe-Runtime` header. */
+/** Runtime name, version, and platform for the `X-Rune-Runtime` header. */
 export const describeRuntime = (): string => {
   const platform =
     g.process?.platform && g.process?.arch ? ` (${g.process.platform}; ${g.process.arch})` : "";

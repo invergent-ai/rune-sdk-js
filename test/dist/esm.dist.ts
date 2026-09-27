@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as sdk from "../../dist/index.mjs";
-import { BASE_URL, cannedFetch, EXPECTED_VALUE_EXPORTS, pkg, SYSTEM_ONE_BODY } from "./helpers";
+import { BASE_URL, cannedFetch, DECISIONS_BODY, EXPECTED_VALUE_EXPORTS, pkg } from "./helpers";
 
 describe("dist/index.mjs (ESM build)", () => {
   it("exposes exactly the documented value exports", () => {
@@ -12,15 +12,15 @@ describe("dist/index.mjs (ESM build)", () => {
   });
 
   it("makes a typed round trip through the bundle", async () => {
-    const { fetch, calls } = cannedFetch(SYSTEM_ONE_BODY);
-    const client = new sdk.TypeSafeClient({
+    const { fetch, calls } = cannedFetch(DECISIONS_BODY);
+    const client = new sdk.RuneClient({
       apiKey: "k",
       baseURL: BASE_URL,
       fetch,
       retry: { maxRetries: 0 },
     });
     const { data, requestId } = await client
-      .systemOne({
+      .decide({
         state: "hi",
         questions: { ok: sdk.noul("ok?"), tone: sdk.choice("tone?", { warm: null, cold: null }) },
       })
@@ -29,14 +29,14 @@ describe("dist/index.mjs (ESM build)", () => {
     expect(requestId).toBe("req_dist");
     expect(data.answers.ok.noul).toBe(0.9);
     expect(data.answers.tone.choice).toBe("warm");
-    expect(calls[0]?.url).toBe(`${BASE_URL}/v1/systemone`);
+    expect(calls[0]?.url).toBe(`${BASE_URL}/v1/decisions`);
     const headers = calls[0]?.init?.headers as Record<string, string>;
-    expect(headers["X-TypeSafe-SDK"]).toBe(`typesafe-sdk/${pkg.version}`);
+    expect(headers["X-Rune-SDK"]).toBe(`rune-sdk/${pkg.version}`);
   });
 
   it("throws the bundle's own error classes", async () => {
     const fetch = async () => new Response("{}", { status: 429, headers: { "retry-after": "1" } });
-    const client = new sdk.TypeSafeClient({
+    const client = new sdk.RuneClient({
       apiKey: "k",
       baseURL: BASE_URL,
       fetch,
@@ -45,7 +45,7 @@ describe("dist/index.mjs (ESM build)", () => {
     const err = await client.models.list().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(sdk.RateLimitError);
     expect(err).toBeInstanceOf(sdk.APIError);
-    expect(err).toBeInstanceOf(sdk.TypeSafeError);
+    expect(err).toBeInstanceOf(sdk.RuneError);
     expect((err as sdk.RateLimitError).retryAfterMs).toBe(1000);
   });
 

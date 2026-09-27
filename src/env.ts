@@ -1,13 +1,13 @@
 /** Environment variable names for client configuration. Explicit options take precedence. */
 export const ENV = {
   /** Required API key; used when `apiKey` is omitted. */
-  apiKey: "TYPESAFE_API_KEY",
-  /** API root; defaults to `https://api.typesafe.ai`. */
-  baseURL: "TYPESAFE_BASE_URL",
-  /** Default model name; defaults to `jev-latest`. */
-  defaultModel: "TYPESAFE_DEFAULT_MODEL",
+  apiKey: "RUNE_API_KEY",
+  /** API root; defaults to `https://rune.surogate.ai`. */
+  baseURL: "RUNE_BASE_URL",
+  /** Default model name; defaults to `rune-v3`. */
+  defaultModel: "RUNE_DEFAULT_MODEL",
   /** Log level; defaults to `warn`. */
-  logLevel: "TYPESAFE_LOG_LEVEL",
+  logLevel: "RUNE_LOG_LEVEL",
 } as const;
 
 export type EnvVar = (typeof ENV)[keyof typeof ENV];

@@ -3,24 +3,24 @@ import {
   type APIPromise,
   type ChoiceResponse,
   choice,
+  type DecisionsResult,
   type ModelCard,
   type NoulQuestion,
   type NoulResponse,
   noul,
   type Question,
   type RetryPolicy,
+  type RuneClient,
   type ScoreResponse,
-  type SystemOneResult,
   score,
-  type TypeSafeClient,
   type WithResponse,
 } from "../src";
 
-declare const client: TypeSafeClient;
+declare const client: RuneClient;
 
-describe("systemOne result inference", () => {
+describe("decide result inference", () => {
   it("maps each question to its response type with literal criteria keys", async () => {
-    const r = await client.systemOne({
+    const r = await client.decide({
       state: "s",
       questions: {
         a: noul("x"),
@@ -62,7 +62,7 @@ describe("systemOne result inference", () => {
   });
 
   it("types score lists by index, with the legend keyed by score", async () => {
-    const r = await client.systemOne({
+    const r = await client.decide({
       state: "s",
       questions: { c: score("z", ["bad", "ok", { rich: "great" }]) },
     });
@@ -85,13 +85,13 @@ describe("systemOne result inference", () => {
 
   it("degrades to numeric indexing for non-literal score lists", async () => {
     const list: [string, string, ...string[]] = ["a", "b"];
-    const r = await client.systemOne({ state: "s", questions: { c: score("z", list) } });
+    const r = await client.decide({ state: "s", questions: { c: score("z", list) } });
     expectTypeOf(r.answers.c.probabilities).toEqualTypeOf<{ readonly [score: number]: number }>();
     expectTypeOf(r.answers.c.legend).toEqualTypeOf<{ readonly [score: number]: string }>();
   });
 
   it("results are readonly", async () => {
-    const r = await client.systemOne({ state: "s", questions: { a: noul("x") } });
+    const r = await client.decide({ state: "s", questions: { a: noul("x") } });
     // @ts-expect-error readonly
     r.model = "other";
     // @ts-expect-error readonly
@@ -100,13 +100,14 @@ describe("systemOne result inference", () => {
     r.usage.input_tokens = 0;
     const models = await client.models.list();
     // @ts-expect-error readonly
-    models[0].name = "other";
+    models[0].id = "other";
     // @ts-expect-error employee-only fields are available through raw access
     models[0].tags;
     expectTypeOf<ModelCard>().toEqualTypeOf<{
-      readonly name: string;
-      readonly description: string;
-      readonly release_date: string;
+      readonly id: string;
+      readonly object: "model";
+      readonly created: number;
+      readonly owned_by: string;
     }>();
   });
 
@@ -158,7 +159,7 @@ describe("criteria shapes", () => {
     // @ts-expect-error a plain string[] may be empty
     score("q", dynamic);
     // @ts-expect-error inference is a client method, not a resource
-    client.systemOne.run({ state: "s", questions: { q: noul("?") } });
+    client.decide.run({ state: "s", questions: { q: noul("?") } });
   });
 });
 
@@ -181,8 +182,8 @@ describe("question helpers", () => {
   });
 
   it("preserves result inference with nulls, arrays, and omitted instructions", async () => {
-    const r = await client.systemOne({
-      state: null,
+    const r = await client.decide({
+      state: { nested: null },
       questions: {
         noul: { type: "noul" },
         choice: { type: "choice", criteria: { yes: null, no: [null, "example"] } },
@@ -192,16 +193,16 @@ describe("question helpers", () => {
     });
     expectTypeOf(r.answers.noul).toEqualTypeOf<NoulResponse>();
     expectTypeOf(r.answers.choice.choice).toEqualTypeOf<"yes" | "no">();
-    expectTypeOf(r.answers.list.legend).toEqualTypeOf<{ readonly 0: null; readonly 1: "high" }>();
+    expectTypeOf(r.answers.list.legend).toEqualTypeOf<{ readonly 0: "0"; readonly 1: "high" }>();
     expectTypeOf(r.answers.literal.legend).toEqualTypeOf<{
-      readonly 0: null;
+      readonly 0: "0";
       readonly 1: "high";
     }>();
     expectTypeOf(r.answers.list.probabilities).toEqualTypeOf<{
       readonly 0: number;
       readonly 1: number;
     }>();
-    client.systemOne({
+    client.decide({
       state: [null, { nested: [true, 1] }],
       questions: {
         q: noul([null, "instructions"], { true: [null, "criterion"] }),
@@ -222,19 +223,19 @@ describe("question helpers", () => {
 describe("APIPromise", () => {
   it("client methods return APIPromise", () => {
     expectTypeOf(client.models.list()).toEqualTypeOf<APIPromise<ModelCard[]>>();
-    const p = client.systemOne({ state: "s", questions: { a: noul("x") } });
-    expectTypeOf(p).toEqualTypeOf<APIPromise<SystemOneResult<{ readonly a: NoulQuestion }>>>();
+    const p = client.decide({ state: "s", questions: { a: noul("x") } });
+    expectTypeOf(p).toEqualTypeOf<APIPromise<DecisionsResult<{ readonly a: NoulQuestion }>>>();
     expectTypeOf(p.withResponse()).toEqualTypeOf<
-      Promise<WithResponse<SystemOneResult<{ readonly a: NoulQuestion }>>>
+      Promise<WithResponse<DecisionsResult<{ readonly a: NoulQuestion }>>>
     >();
     expectTypeOf(p.asResponse()).toEqualTypeOf<Promise<Response>>();
   });
 
   it("awaiting yields the plain result", async () => {
-    const r = await client.systemOne({ state: "s", questions: { a: noul("x") } });
-    expectTypeOf(r).toEqualTypeOf<SystemOneResult<{ readonly a: NoulQuestion }>>();
+    const r = await client.decide({ state: "s", questions: { a: noul("x") } });
+    expectTypeOf(r).toEqualTypeOf<DecisionsResult<{ readonly a: NoulQuestion }>>();
     const { data, requestId } = await client
-      .systemOne({ state: "s", questions: { a: noul("x") } })
+      .decide({ state: "s", questions: { a: noul("x") } })
       .withResponse();
     expectTypeOf(data.answers.a).toEqualTypeOf<NoulResponse>();
     expectTypeOf(requestId).toEqualTypeOf<string | undefined>();

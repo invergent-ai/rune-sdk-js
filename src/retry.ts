@@ -2,7 +2,7 @@
 
 import type { RetryPolicy } from "./types";
 
-export const DEFAULT_TIMEOUT_MS = 10_000;
+export const DEFAULT_TIMEOUT_MS = 120_000;
 
 const range = (from: number, to: number): number[] =>
   Array.from({ length: to - from }, (_, i) => from + i);

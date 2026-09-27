@@ -1,6 +1,6 @@
 import { createServer, type RequestListener } from "node:http";
 import { describe, expect, it } from "vitest";
-import { APITimeoutError, APIUserAbortError, noul, TypeSafeClient } from "../src";
+import { APITimeoutError, APIUserAbortError, noul, RuneClient } from "../src";
 
 /** Real fetch/socket coverage: mocks do not reproduce the headers/body lifecycle. */
 const withServer = async (
@@ -35,14 +35,11 @@ describe("native response transport", () => {
         res.end("{}");
       },
       async (baseURL) => {
-        await new TypeSafeClient({
+        await new RuneClient({
           apiKey: "test",
           baseURL,
           defaultHeaders: { authorization: "bad", "X-Team": "default", "content-type": "bad" },
-        }).systemOne(
-          { state: "s", questions: { q: noul("?") } },
-          { headers: { "x-team": "call" } },
-        );
+        }).decide({ state: "s", questions: { q: noul("?") } }, { headers: { "x-team": "call" } });
       },
     );
     expect(observed).toMatchObject({
@@ -62,7 +59,7 @@ describe("native response transport", () => {
           res.flushHeaders();
         },
         async (baseURL) => {
-          const client = new TypeSafeClient({
+          const client = new RuneClient({
             apiKey: "k",
             baseURL,
             timeout: 200,
@@ -94,7 +91,7 @@ describe("native response transport", () => {
         },
         async (baseURL) => {
           const ac = new AbortController();
-          const client = new TypeSafeClient({
+          const client = new RuneClient({
             apiKey: "k",
             baseURL,
             fetch: async (url, init) => {
@@ -121,15 +118,15 @@ describe("native response transport", () => {
           attempts++;
           res.writeHead(attempts === 1 ? status : 200, {
             "content-type": "application/json",
-            "x-typesafe-request-id": `req_${attempts}`,
+            "x-request-id": `req_${attempts}`,
           });
           if (attempts === 1) {
             res.write("[");
             setTimeout(() => res.destroy(), 10);
-          } else res.end('{"models":[]}');
+          } else res.end('{"data":[]}');
         },
         async (baseURL) => {
-          const client = new TypeSafeClient({
+          const client = new RuneClient({
             apiKey: "k",
             baseURL,
             retry: { maxRetries: 1, backoffInitialMs: 0 },
@@ -158,7 +155,7 @@ describe("native response transport", () => {
       },
       async (baseURL) => {
         const ac = new AbortController();
-        const response = await new TypeSafeClient({ apiKey: "k", baseURL }).models
+        const response = await new RuneClient({ apiKey: "k", baseURL }).models
           .list({ signal: ac.signal })
           .asResponse();
         expect(completed).toBe(true);

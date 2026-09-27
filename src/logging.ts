@@ -1,4 +1,4 @@
-import { TypeSafeError } from "./errors";
+import { RuneError } from "./errors";
 import type { Logger, LogLevel } from "./types";
 
 /** Supported log levels, from most to least verbose. */
@@ -9,10 +9,10 @@ export const DEFAULT_LOG_LEVEL: LogLevel = "warn";
 const isLogLevel = (value: string): value is LogLevel =>
   (LOG_LEVELS as readonly string[]).includes(value);
 
-/** Validate a configured log level, throwing `TypeSafeError` for unknown values. */
+/** Validate a configured log level, throwing `RuneError` for unknown values. */
 export const parseLogLevel = (value: string, source: string): LogLevel => {
   if (isLogLevel(value)) return value;
-  throw new TypeSafeError(
+  throw new RuneError(
     `Invalid log level "${value}" from ${source}. Expected one of: ${LOG_LEVELS.join(", ")}.`,
   );
 };
@@ -21,9 +21,9 @@ export const parseLogLevel = (value: string, source: string): LogLevel => {
 // Loggers
 // ---------------------------------------------------------------------------
 
-const PREFIX = "[typesafe-sdk]";
+const PREFIX = "[rune-sdk]";
 
-/** Default console logger with the `[typesafe-sdk]` prefix. */
+/** Default console logger with the `[rune-sdk]` prefix. */
 export const consoleLogger: Logger = {
   debug: (message, ...args) => console.debug(`${PREFIX} ${message}`, ...args),
   info: (message, ...args) => console.info(`${PREFIX} ${message}`, ...args),

@@ -1,10 +1,10 @@
-// Run with `npm run demo`. Needs TYPESAFE_API_KEY in the environment.
-import { APIError, choice, noul, score, TypeSafeClient } from "../src";
+// Run with `npm run demo`. Needs RUNE_API_KEY in the environment.
+import { APIError, choice, noul, RuneClient, score } from "../src";
 
-const client = new TypeSafeClient({ logLevel: "info" });
+const client = new RuneClient({ logLevel: "info" });
 
 const models = await client.models.list();
-console.log("Available models:", models.map((m) => m.name).join(", "));
+console.log("Available models:", models.map((m) => m.id).join(", "));
 
 const ticket = {
   subject: "Charged twice this month",
@@ -12,7 +12,7 @@ const ticket = {
 };
 
 try {
-  const { answers, usage } = await client.systemOne({
+  const { answers, usage } = await client.decide({
     state: ticket,
     questions: {
       isBilling: noul("Is this ticket about billing?"),
