@@ -17,12 +17,21 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: ${{ matrix.node }}
+          # The compiler requires Node 22.18+ or 24.11+; runtime support starts at 20.
+          node-version: '24'
           package-manager-cache: false
       - run: npm ci
       - run: npm run check
-      - name: Test the installable package
+      - name: Pack the SDK
         run: |
           mkdir -p release
           npm pack --pack-destination release
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Test the supported runtime
+        run: |
+          npm test
+          npm run test:dist
           node scripts/test-tarball.mjs

@@ -1,11 +1,12 @@
 # Invergent Rune JavaScript / TypeScript SDK
 
-Typed clients for the Rune decisions API, maintained by Invergent. Requires Node.js 20+.
-The package provides ESM, CommonJS and TypeScript declarations.
+Typed clients for the Rune decisions API, maintained by Invergent. The packaged SDK runs
+on Node.js 20+ and provides ESM, CommonJS and TypeScript declarations.
 
 ## Install
 
-Install from GitHub until a registry release is available (the install builds the SDK):
+Install from GitHub until a registry release is available. This builds the SDK, so use
+Node.js 24.11+ for the installation:
 
 ```bash
 npm install github:invergent-ai/rune-sdk-js
@@ -113,6 +114,8 @@ raw `Response`. Keep API keys on your server; browser use is refused by default.
 Debug logging includes bodies but redacts known credential headers.
 
 ## Development
+
+Use Node.js 24.11+ to build from source. CI also tests the built package on Node.js 20.
 
 ```bash
 npm ci
