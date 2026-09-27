@@ -1,5 +1,7 @@
 # Surogate Rune JavaScript / TypeScript SDK
 
+![Surogate Rune — decisions from text, structured data and images](https://raw.githubusercontent.com/invergent-ai/rune-sdk-js/main/assets/rune-og.jpg)
+
 Typed clients for the Surogate Rune decisions API, maintained by Invergent. The packaged SDK runs
 on Node.js 20+ and provides ESM, CommonJS and TypeScript declarations.
 
