@@ -181,10 +181,14 @@ const mergeHeaders = (
 const bufferResponse = async (response: Response, signal: AbortSignal): Promise<void> => {
   const reader = response.clone().body?.getReader();
   if (!reader) return;
+  // Keep the original branch locked while buffering. Node 20's fetch otherwise
+  // cancels this tee branch itself on abort and can leave an unhandled rejection.
+  const retainedReader = response.body?.getReader();
+  void retainedReader?.closed.catch(() => {});
   const cancel = (): void => {
     // Cancel both tee branches without waiting for an underlying source to acknowledge it.
     void reader.cancel(signal.reason).catch(() => {});
-    void response.body?.cancel(signal.reason).catch(() => {});
+    void retainedReader?.cancel(signal.reason).catch(() => {});
   };
   signal.addEventListener("abort", cancel, { once: true });
   try {
@@ -197,6 +201,7 @@ const bufferResponse = async (response: Response, signal: AbortSignal): Promise<
   } finally {
     signal.removeEventListener("abort", cancel);
     reader.releaseLock();
+    retainedReader?.releaseLock();
   }
 };
 
