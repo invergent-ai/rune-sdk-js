@@ -235,7 +235,7 @@ interface ResolvedRequest {
 /** Runtime description cached for the process lifetime. */
 const RUNTIME = describeRuntime();
 
-/** Client for the Invergent Rune API. */
+/** Client for the Surogate Rune API. */
 export class RuneClient {
   /** API key excluded from serialization and public properties. */
   readonly #apiKey: string;
@@ -262,7 +262,7 @@ export class RuneClient {
   #requestCount = 0;
 
   /**
-   * Create a client for the Invergent Rune API.
+   * Create a client for the Surogate Rune API.
    *
    * Explicit options take precedence over environment variables, then SDK defaults.
    * Empty or whitespace-only environment values are ignored.

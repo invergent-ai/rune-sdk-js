@@ -1,7 +1,7 @@
 {
   "name": "@invergent-ai/rune-sdk",
   "version": "0.1.0",
-  "description": "JavaScript and TypeScript SDK for the Invergent Rune API",
+  "description": "JavaScript and TypeScript SDK for the Surogate Rune API",
   "license": "MIT",
   "author": "Invergent",
   "type": "module",

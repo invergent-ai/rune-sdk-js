@@ -1,6 +1,6 @@
-# Invergent Rune JavaScript / TypeScript SDK
+# Surogate Rune JavaScript / TypeScript SDK
 
-Typed clients for the Rune decisions API, maintained by Invergent. The packaged SDK runs
+Typed clients for the Surogate Rune decisions API, maintained by Invergent. The packaged SDK runs
 on Node.js 20+ and provides ESM, CommonJS and TypeScript declarations.
 
 ## Install
