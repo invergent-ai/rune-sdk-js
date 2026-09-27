@@ -32,7 +32,7 @@ export const noul = (
  * Create a score question using an ordered rubric.
  *
  * @param instructions - The question as text, a JSON object or array, or `null`.
- * @param criteria - At least two descriptions indexed by score from zero; entries may be `null`.
+ * @param criteria - At least one description indexed by score from zero; entries may be `null`.
  */
 export const score = <const T extends ScoreCriteria>(
   instructions: EntryType,
@@ -66,7 +66,7 @@ export const choice = <const T extends ChoiceCriteria>(
 // Validation
 // ---------------------------------------------------------------------------
 
-/** Reject empty question sets and score questions without a list of at least two criteria. */
+/** Reject empty question sets and score questions without a list of at least one criterion. */
 export const validateQuestions = (questions: Questions): void => {
   if (Object.keys(questions).length === 0) {
     throw new RuneError("At least one question is required.");
@@ -79,10 +79,10 @@ export const validateQuestions = (questions: Questions): void => {
           "score criteria must be a list of descriptions indexed by score from zero.",
       );
     }
-    if (question.criteria.length < 2) {
+    if (question.criteria.length < 1) {
       throw new RuneError(
         `Score question "${name}" has ${question.criteria.length} criteria; ` +
-          "at least two scores are required.",
+          "at least one score is required.",
       );
     }
   }

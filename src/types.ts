@@ -45,8 +45,8 @@ export interface ChoiceQuestion<T extends ChoiceCriteria = ChoiceCriteria> {
   criteria: T;
 }
 
-/** At least two descriptions indexed by score from zero; `null` leaves a score undescribed. */
-export type ScoreCriteria = readonly [EntryType, EntryType, ...EntryType[]];
+/** At least one description indexed by score from zero; `null` leaves a score undescribed. */
+export type ScoreCriteria = readonly [EntryType, ...EntryType[]];
 
 /** A question that assigns a score using an ordered rubric. */
 export interface ScoreQuestion<T extends ScoreCriteria = ScoreCriteria> {
