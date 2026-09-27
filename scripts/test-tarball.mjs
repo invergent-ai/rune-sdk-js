@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 
 const files = readdirSync("release").filter((file) => file.endsWith(".tgz"));
 if (files.length !== 1) throw new Error("Expected one package tarball");
-const consumer = mkdtempSync(join(tmpdir(), "typesafe-consumer-"));
+const consumer = mkdtempSync(join(tmpdir(), "rune-consumer-"));
 try {
   writeFileSync(join(consumer, "package.json"), '{"private":true}');
   execFileSync(
@@ -24,8 +24,8 @@ try {
   for (const type of ["commonjs", "module"]) {
     const load =
       type === "module"
-        ? 'import * as sdk from "@typesafe-ai/sdk";'
-        : 'const sdk = require("@typesafe-ai/sdk");';
+        ? 'import * as sdk from "@invergent-ai/rune-sdk";'
+        : 'const sdk = require("@invergent-ai/rune-sdk");';
     execFileSync(
       process.execPath,
       [
@@ -33,9 +33,9 @@ try {
         type,
         "--eval",
         `${load}
-      if (typeof sdk.TypeSafeClient !== "function" || typeof sdk.choice !== "function")
+      if (typeof sdk.RuneClient !== "function" || typeof sdk.choice !== "function")
         throw new Error("Missing package exports");
-      const client = new sdk.TypeSafeClient({ apiKey: "package-smoke-test" });
+      const client = new sdk.RuneClient({ apiKey: "package-smoke-test" });
       if (!client) throw new Error("Client construction failed");
     `,
       ],

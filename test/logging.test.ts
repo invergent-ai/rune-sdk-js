@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type Logger, TypeSafeClient, VERSION } from "../src";
+import { type Logger, RuneClient, VERSION } from "../src";
 import { consoleLogger, redactHeaders } from "../src/logging";
 import { json, mockFetch } from "./helpers";
 
@@ -26,9 +26,9 @@ describe("default console logger", () => {
     const spies = ["debug", "info", "warn", "error"].map((m) =>
       vi.spyOn(console, m as "debug").mockImplementation(() => {}),
     );
-    await new TypeSafeClient({
+    await new RuneClient({
       apiKey: "k",
-      fetch: mockFetch(() => json({ models: [] })).fetch,
+      fetch: mockFetch(() => json({ data: [] })).fetch,
     }).models.list();
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
   });
@@ -36,34 +36,32 @@ describe("default console logger", () => {
   it("writes prefixed lines to console at debug level", async () => {
     const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
-      fetch: mockFetch(() => json({ models: [] })).fetch,
+      fetch: mockFetch(() => json({ data: [] })).fetch,
       logLevel: "debug",
     });
     await client.models.list();
     expect(debug).toHaveBeenCalled();
     expect(info).toHaveBeenCalled();
     for (const call of [...debug.mock.calls, ...info.mock.calls]) {
-      expect(call[0]).toMatch(/^\[typesafe-sdk\] #1 GET \/v1\/models/);
+      expect(call[0]).toMatch(/^\[rune-sdk\] #1 GET \/v1\/models/);
     }
   });
 
   it("routes each level to the matching console method", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     consoleLogger.warn("careful", { a: 1 });
-    expect(spy).toHaveBeenCalledWith("[typesafe-sdk] careful", { a: 1 });
+    expect(spy).toHaveBeenCalledWith("[rune-sdk] careful", { a: 1 });
   });
 });
 
 describe("custom logger and level filtering", () => {
   const clientWith = (logger: Logger, logLevel: "debug" | "info" | "warn" | "error" | "off") =>
-    new TypeSafeClient({
+    new RuneClient({
       apiKey: "sk_live_0123456789abcdef",
       baseURL: "https://x.test",
-      fetch: mockFetch(() =>
-        json({ models: [] }, { headers: { "x-typesafe-request-id": "req_9" } }),
-      ).fetch,
+      fetch: mockFetch(() => json({ data: [] }, { headers: { "x-request-id": "req_9" } })).fetch,
       logger,
       logLevel,
     });
@@ -103,14 +101,14 @@ describe("custom logger and level filtering", () => {
       headers: {
         Authorization: "Bearer ***cdef",
         Accept: "application/json",
-        "User-Agent": `typesafe-sdk/${VERSION}`,
-        "X-TypeSafe-SDK": `typesafe-sdk/${VERSION}`,
-        "X-TypeSafe-Runtime": expect.stringMatching(/^node\//),
+        "User-Agent": `rune-sdk/${VERSION}`,
+        "X-Rune-SDK": `rune-sdk/${VERSION}`,
+        "X-Rune-Runtime": expect.stringMatching(/^node\//),
       },
       body: undefined,
     });
 
-    expect(logger.calls.at(-1)).toEqual(["debug", "#1 GET /v1/models <- body", { models: [] }]);
+    expect(logger.calls.at(-1)).toEqual(["debug", "#1 GET /v1/models <- body", { data: [] }]);
   });
 
   it("never logs the raw API key", async () => {
@@ -132,7 +130,7 @@ describe("custom logger and level filtering", () => {
 
   it("logs error responses as a summary plus the body at debug, without a warn", async () => {
     const logger = recordingLogger();
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch: mockFetch(() => json({ message: "nope" }, { status: 404 })).fetch,
       logger,
@@ -154,7 +152,7 @@ describe("custom logger and level filtering", () => {
   it("logs connection failures with the underlying error", async () => {
     const logger = recordingLogger();
     const boom = new TypeError("fetch failed");
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch: mockFetch(() => {
         throw boom;
@@ -172,7 +170,7 @@ describe("custom logger and level filtering", () => {
   it("logs caller aborts", async () => {
     const logger = recordingLogger();
     const ac = new AbortController();
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "k",
       fetch: mockFetch(() => {
         ac.abort();

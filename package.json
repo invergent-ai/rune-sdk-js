@@ -1,9 +1,9 @@
 {
-  "name": "@typesafe-ai/sdk",
-  "version": "0.6.0",
-  "description": "TypeScript SDK for the TypeSafe API",
+  "name": "@invergent-ai/rune-sdk",
+  "version": "0.1.0",
+  "description": "JavaScript and TypeScript SDK for the Invergent Rune API",
   "license": "MIT",
-  "author": "evinism",
+  "author": "Invergent",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -24,7 +24,8 @@
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "UPSTREAM.md"
   ],
   "sideEffects": false,
   "engines": {
@@ -50,7 +51,8 @@
     "push:jsr:dry": "npm run check && jsr publish --dry-run --allow-dirty",
     "demo": "tsx examples/demo.ts",
     "check": "npm run lint && npm run typecheck && npm run check:version && npm run test:coverage && npm run build && npm run test:dist && npm run check:package",
-    "docs": "npm ci --prefix docs --ignore-scripts --no-audit --no-fund && npm run --prefix docs build"
+    "docs": "npm ci --prefix docs --ignore-scripts --no-audit --no-fund && npm run --prefix docs build",
+    "prepare": "npm run build"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
@@ -70,10 +72,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/typesafe-ai/typesafe-sdk-js.git"
+    "url": "git+https://github.com/invergent-ai/rune-sdk-js.git"
   },
-  "homepage": "https://docs.typesafe.ai/sdk/javascript",
+  "homepage": "https://github.com/invergent-ai/rune-sdk-js#readme",
   "bugs": {
-    "url": "https://github.com/typesafe-ai/typesafe-sdk-js/issues"
+    "url": "https://github.com/invergent-ai/rune-sdk-js/issues"
   }
 }

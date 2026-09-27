@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-/** Live API tests; `npm run test:integration` requires `TYPESAFE_API_KEY`. */
+/** Live API tests; `npm run test:integration` requires `RUNE_API_KEY`. */
 export default defineConfig({
   test: {
     include: ["test/integration/**/*.integration.ts"],

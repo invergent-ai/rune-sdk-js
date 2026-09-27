@@ -1,4 +1,4 @@
-export const REQUEST_ID_HEADER = "x-typesafe-request-id";
+export const REQUEST_ID_HEADER = "x-request-id";
 
 export const requestIdFrom = (headers: Headers): string | undefined =>
   headers.get(REQUEST_ID_HEADER) ?? undefined;
@@ -9,7 +9,7 @@ export interface WithResponse<T> {
   data: T;
   /** The HTTP response, with its body consumed by parsing. */
   response: Response;
-  /** Request ID from `x-typesafe-request-id`, or `undefined` when absent. */
+  /** Request ID from `x-request-id`, or `undefined` when absent. */
   requestId: string | undefined;
 }
 

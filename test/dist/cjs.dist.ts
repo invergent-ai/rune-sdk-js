@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import type * as Esm from "../../dist/index.mjs";
-import { BASE_URL, cannedFetch, EXPECTED_VALUE_EXPORTS, pkg, SYSTEM_ONE_BODY } from "./helpers";
+import { BASE_URL, cannedFetch, DECISIONS_BODY, EXPECTED_VALUE_EXPORTS, pkg } from "./helpers";
 
 const require = createRequire(import.meta.url);
 // The CJS build exposes the same API as the ESM build; borrow its types.
@@ -17,14 +17,14 @@ describe("dist/index.cjs (CommonJS build)", () => {
   });
 
   it("makes a round trip through the bundle", async () => {
-    const { fetch } = cannedFetch(SYSTEM_ONE_BODY);
-    const client = new sdk.TypeSafeClient({
+    const { fetch } = cannedFetch(DECISIONS_BODY);
+    const client = new sdk.RuneClient({
       apiKey: "k",
       baseURL: BASE_URL,
       fetch,
       retry: { maxRetries: 0 },
     });
-    const result = await client.systemOne({
+    const result = await client.decide({
       state: "hi",
       questions: { ok: sdk.noul("ok?"), tone: sdk.choice("tone?", { warm: null, cold: null }) },
     });

@@ -18,17 +18,17 @@ export const cannedFetch = (
     calls.push({ url, init });
     return new Response(JSON.stringify(body), {
       status: 200,
-      headers: { "content-type": "application/json", "x-typesafe-request-id": "req_dist" },
+      headers: { "content-type": "application/json", "x-request-id": "req_dist" },
     });
   };
   return { fetch, calls };
 };
 
-/** Fixed API root independent of `TYPESAFE_BASE_URL`. */
+/** Fixed API root independent of `RUNE_BASE_URL`. */
 export const BASE_URL = "https://dist.test";
 
-export const SYSTEM_ONE_BODY: Record<string, unknown> = {
-  model: "jev-latest",
+export const DECISIONS_BODY: Record<string, unknown> = {
+  model: "rune-v3",
   answers: {
     ok: { type: "noul", noul: 0.9 },
     tone: {
@@ -56,8 +56,8 @@ export const EXPECTED_VALUE_EXPORTS: string[] = [
   "NotFoundError",
   "PermissionDeniedError",
   "RateLimitError",
-  "TypeSafeClient",
-  "TypeSafeError",
+  "RuneClient",
+  "RuneError",
   "UnprocessableEntityError",
   "VERSION",
   "choice",

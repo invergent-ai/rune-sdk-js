@@ -4,8 +4,8 @@ import {
   APITimeoutError,
   APIUserAbortError,
   noul,
+  RuneClient,
   score,
-  TypeSafeClient,
 } from "../src";
 import { json, mockFetch } from "./helpers";
 
@@ -17,18 +17,18 @@ describe("release regressions", () => {
     const { fetch, requests } = mockFetch(() =>
       ++calls === 1 ? json({}, { status: 503 }) : json({}),
     );
-    const client = new TypeSafeClient({
+    const client = new RuneClient({
       apiKey: "secret",
       fetch,
       defaultHeaders: {
         "X-Team": "default",
         authorization: "bad",
         "content-type": "text/plain",
-        "x-typesafe-retry-count": "99",
+        "x-rune-retry-count": "99",
       },
       retry: { maxRetries: 1, backoffInitialMs: 0 },
     });
-    await client.systemOne(
+    await client.decide(
       { state: "s", questions: { q: noul("?") } },
       {
         headers: {
@@ -36,10 +36,10 @@ describe("release regressions", () => {
           AUTHORIZATION: "bad-again",
           ACCEPT: "text/plain",
           "USER-AGENT": "bad",
-          "X-TYPESAFE-SDK": "bad",
-          "X-TYPESAFE-RUNTIME": "bad",
+          "X-RUNE-SDK": "bad",
+          "X-RUNE-RUNTIME": "bad",
           "CONTENT-TYPE": "text/html",
-          "X-TYPESAFE-RETRY-COUNT": "88",
+          "X-RUNE-RETRY-COUNT": "88",
         },
       },
     );
@@ -50,23 +50,23 @@ describe("release regressions", () => {
       expect(headers.get("x-team")).toBe("call");
       expect(headers.get("content-type")).toBe("application/json");
       expect(headers.get("accept")).toBe("application/json");
-      expect(headers.get("user-agent")).toMatch(/^typesafe-sdk\//);
-      expect(headers.get("x-typesafe-sdk")).toMatch(/^typesafe-sdk\//);
-      expect(headers.get("x-typesafe-runtime")).not.toContain("bad");
-      expect(headers.get("x-typesafe-retry-count")).toBe(index === 0 ? null : "1");
+      expect(headers.get("user-agent")).toMatch(/^rune-sdk\//);
+      expect(headers.get("x-rune-sdk")).toMatch(/^rune-sdk\//);
+      expect(headers.get("x-rune-runtime")).not.toContain("bad");
+      expect(headers.get("x-rune-retry-count")).toBe(index === 0 ? null : "1");
     }
   });
 
   it("does not send a caller-supplied content type or retry count on GET", async () => {
-    const { fetch, requests } = mockFetch(() => json({ models: [] }));
-    await new TypeSafeClient({
+    const { fetch, requests } = mockFetch(() => json({ data: [] }));
+    await new RuneClient({
       apiKey: "k",
       fetch,
-      defaultHeaders: { "content-type": "bad", "x-typesafe-retry-count": "99" },
+      defaultHeaders: { "content-type": "bad", "x-rune-retry-count": "99" },
     }).models.list();
     const headers = new Headers(requests[0]?.init?.headers);
     expect(headers.has("content-type")).toBe(false);
-    expect(headers.has("x-typesafe-retry-count")).toBe(false);
+    expect(headers.has("x-rune-retry-count")).toBe(false);
   });
 
   it("preserves own __proto__ questions without mutation", async () => {
@@ -74,10 +74,14 @@ describe("release regressions", () => {
     questions.score = score("?", ["no", "yes"]);
     const original = JSON.stringify(questions);
     const { fetch, requests } = mockFetch(() => json({}));
-    await new TypeSafeClient({ apiKey: "k", fetch }).systemOne({ state: "s", questions });
+    await new RuneClient({ apiKey: "k", fetch }).decide({ state: "s", questions });
     const body = JSON.parse(String(requests[0]?.init?.body));
     expect(Object.hasOwn(body.questions, "__proto__")).toBe(true);
-    expect(Object.getOwnPropertyDescriptor(body.questions, "__proto__")?.value).toEqual(noul("?"));
+    expect(Object.getOwnPropertyDescriptor(body.questions, "__proto__")?.value).toEqual({
+      type: "noul",
+      instructions: "?",
+      criteria: { true: "true", false: "false" },
+    });
     expect(body.questions.score.criteria).toEqual(["no", "yes"]);
     expect(JSON.stringify(questions)).toBe(original);
   });
@@ -90,7 +94,7 @@ describe("release regressions", () => {
       const { fetch, requests } = mockFetch(
         () => new Response(new ReadableStream({ cancel }), { status }),
       );
-      const client = new TypeSafeClient({
+      const client = new RuneClient({
         apiKey: "k",
         fetch,
         timeout: 50,
@@ -120,7 +124,7 @@ describe("release regressions", () => {
             { status },
           ),
       );
-      const client = new TypeSafeClient({
+      const client = new RuneClient({
         apiKey: "k",
         fetch,
         retry: { apiConnectionError: false },
@@ -138,7 +142,7 @@ describe("release regressions", () => {
       ac.abort();
       return new Response(new ReadableStream());
     });
-    const client = new TypeSafeClient({ apiKey: "k", fetch });
+    const client = new RuneClient({ apiKey: "k", fetch });
     await expect(client.models.list({ signal: ac.signal })).rejects.toBeInstanceOf(
       APIUserAbortError,
     );
@@ -147,7 +151,7 @@ describe("release regressions", () => {
 
   it("returns a null-body response without trying to read a stream", async () => {
     const { fetch } = mockFetch(() => new Response(null, { status: 204 }));
-    const response = await new TypeSafeClient({ apiKey: "k", fetch }).models.list().asResponse();
+    const response = await new RuneClient({ apiKey: "k", fetch }).models.list().asResponse();
     expect(response.status).toBe(204);
     expect(response.body).toBeNull();
   });

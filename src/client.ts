@@ -5,7 +5,7 @@ import {
   APIError,
   APITimeoutError,
   APIUserAbortError,
-  TypeSafeError,
+  RuneError,
 } from "./errors";
 import {
   consoleLogger,
@@ -14,7 +14,7 @@ import {
   redactHeaders,
   withLevel,
 } from "./logging";
-import { validateQuestions } from "./questions";
+import { normalizeQuestions } from "./questions";
 import { Models } from "./resources/models";
 import {
   DEFAULT_RETRY_POLICY,
@@ -25,41 +25,41 @@ import {
 } from "./retry";
 import { describeRuntime, isBrowser } from "./runtime";
 import type {
+  DecisionsRequest,
+  DecisionsRequestPayload,
+  DecisionsResult,
   Fetch,
   Logger,
   LogLevel,
   Questions,
   RequestOptions,
   RetryPolicy,
-  SystemOneRequest,
-  SystemOneRequestPayload,
-  SystemOneResult,
-  TypeSafeClientConfig,
+  RuneClientConfig,
 } from "./types";
 import { VERSION } from "./version";
 
-export const DEFAULT_BASE_URL = "https://api.typesafe.ai";
-export const DEFAULT_MODEL = "jev-latest";
+export const DEFAULT_BASE_URL = "https://rune.surogate.ai";
+export const DEFAULT_MODEL = "rune-v3";
 
 // ---------------------------------------------------------------------------
 // Construction-time checks
 // ---------------------------------------------------------------------------
 
 const missingApiKey = (): never => {
-  throw new TypeSafeError(
-    `No API key was provided. Pass \`apiKey\` to the TypeSafeClient constructor or set the ${ENV.apiKey} environment variable.`,
+  throw new RuneError(
+    `No API key was provided. Pass \`apiKey\` to the RuneClient constructor or set the ${ENV.apiKey} environment variable.`,
   );
 };
 
 const missingFetch = (): never => {
-  throw new TypeSafeError(
-    "No global `fetch` is available in this runtime. Pass a `fetch` implementation to the TypeSafeClient constructor.",
+  throw new RuneError(
+    "No global `fetch` is available in this runtime. Pass a `fetch` implementation to the RuneClient constructor.",
   );
 };
 
 const refuseBrowser = (): never => {
-  throw new TypeSafeError(
-    "TypeSafeClient is running in a browser, which would expose your API key to anyone using the page. " +
+  throw new RuneError(
+    "RuneClient is running in a browser, which would expose your API key to anyone using the page. " +
       "Call the API from a server instead, or pass `dangerouslyAllowBrowser: true` if you understand the risk.",
   );
 };
@@ -69,14 +69,14 @@ const defaultFetch: Fetch = (input, init) => globalThis.fetch(input, init);
 
 const assertNonNegativeInteger = (name: string, value: number): number => {
   if (!Number.isInteger(value) || value < 0) {
-    throw new TypeSafeError(`\`${name}\` must be a non-negative integer, got ${String(value)}.`);
+    throw new RuneError(`\`${name}\` must be a non-negative integer, got ${String(value)}.`);
   }
   return value;
 };
 
 const assertPositiveMs = (name: string, value: number): number => {
   if (!Number.isFinite(value) || value <= 0) {
-    throw new TypeSafeError(
+    throw new RuneError(
       `\`${name}\` must be a positive number of milliseconds, got ${String(value)}.`,
     );
   }
@@ -85,7 +85,7 @@ const assertPositiveMs = (name: string, value: number): number => {
 
 const assertNonNegativeMs = (name: string, value: number): number => {
   if (!Number.isFinite(value) || value < 0) {
-    throw new TypeSafeError(
+    throw new RuneError(
       `\`${name}\` must be a non-negative number of milliseconds, got ${String(value)}.`,
     );
   }
@@ -94,7 +94,7 @@ const assertNonNegativeMs = (name: string, value: number): number => {
 
 const assertFraction = (name: string, value: number): number => {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
-    throw new TypeSafeError(`\`${name}\` must be between 0 and 1, got ${String(value)}.`);
+    throw new RuneError(`\`${name}\` must be between 0 and 1, got ${String(value)}.`);
   }
   return value;
 };
@@ -102,7 +102,7 @@ const assertFraction = (name: string, value: number): number => {
 const assertStatusSet = (name: string, statuses: ReadonlySet<number>): ReadonlySet<number> => {
   for (const status of statuses) {
     if (!Number.isInteger(status) || status < 100 || status > 999) {
-      throw new TypeSafeError(`\`${name}\` must contain HTTP status codes, got ${String(status)}.`);
+      throw new RuneError(`\`${name}\` must contain HTTP status codes, got ${String(status)}.`);
     }
   }
   return statuses;
@@ -181,10 +181,14 @@ const mergeHeaders = (
 const bufferResponse = async (response: Response, signal: AbortSignal): Promise<void> => {
   const reader = response.clone().body?.getReader();
   if (!reader) return;
+  // Keep the original branch locked while buffering. Node 20's fetch otherwise
+  // cancels this tee branch itself on abort and can leave an unhandled rejection.
+  const retainedReader = response.body?.getReader();
+  void retainedReader?.closed.catch(() => {});
   const cancel = (): void => {
     // Cancel both tee branches without waiting for an underlying source to acknowledge it.
     void reader.cancel(signal.reason).catch(() => {});
-    void response.body?.cancel(signal.reason).catch(() => {});
+    void retainedReader?.cancel(signal.reason).catch(() => {});
   };
   signal.addEventListener("abort", cancel, { once: true });
   try {
@@ -197,6 +201,7 @@ const bufferResponse = async (response: Response, signal: AbortSignal): Promise<
   } finally {
     signal.removeEventListener("abort", cancel);
     reader.releaseLock();
+    retainedReader?.releaseLock();
   }
 };
 
@@ -230,8 +235,8 @@ interface ResolvedRequest {
 /** Runtime description cached for the process lifetime. */
 const RUNTIME = describeRuntime();
 
-/** Client for the TypeSafe AI API. */
-export class TypeSafeClient {
+/** Client for the Invergent Rune API. */
+export class RuneClient {
   /** API key excluded from serialization and public properties. */
   readonly #apiKey: string;
   /** API root with trailing slashes removed. */
@@ -257,14 +262,14 @@ export class TypeSafeClient {
   #requestCount = 0;
 
   /**
-   * Create a client for the TypeSafe AI API.
+   * Create a client for the Invergent Rune API.
    *
    * Explicit options take precedence over environment variables, then SDK defaults.
    * Empty or whitespace-only environment values are ignored.
    *
-   * @throws {TypeSafeError} The API key is missing, configuration is invalid, or the runtime is unsupported.
+   * @throws {RuneError} The API key is missing, configuration is invalid, or the runtime is unsupported.
    */
-  constructor(config: TypeSafeClientConfig = {}) {
+  constructor(config: RuneClientConfig = {}) {
     if (isBrowser() && !config.dangerouslyAllowBrowser) refuseBrowser();
 
     this.#apiKey = fromCodeOrEnv(config.apiKey, ENV.apiKey) ?? missingApiKey();
@@ -294,31 +299,31 @@ export class TypeSafeClient {
    * @param request - State, questions, and an optional model override.
    * @param options - Per-call timeout, retry, headers, and cancellation settings.
    * @returns Answers typed by question name and criteria, with model and token usage.
-   * @throws {TypeSafeError} Questions are empty, or score criteria are not a list of at least two entries.
+   * @throws {RuneError} Questions are empty, or score criteria are not a list of at least two entries.
    * @throws {APIError} The server returns a non-2xx response after retries.
    * @throws {APIConnectionError} The request cannot connect or times out after retries.
    * @throws {APIUserAbortError} The caller aborts the request.
    *
    * @example
    * ```ts
-   * const { answers } = await client.systemOne({
+   * const { answers } = await client.decide({
    *   state: "I was charged twice. Please help.",
    *   questions: { billing: noul("Is this about billing?") },
    * });
    * console.log(answers.billing.noul);
    * ```
    */
-  systemOne<const Q extends Questions>(
-    request: SystemOneRequest<Q>,
+  decide<const Q extends Questions>(
+    request: DecisionsRequest<Q>,
     options: RequestOptions = {},
-  ): APIPromise<SystemOneResult<Q>> {
-    validateQuestions(request.questions);
+  ): APIPromise<DecisionsResult<Q>> {
     const body = {
       ...request,
       model: request.model ?? this.defaultModel,
-    } satisfies SystemOneRequestPayload;
+      questions: normalizeQuestions(request.questions),
+    } satisfies DecisionsRequestPayload;
 
-    return this.#request<SystemOneResult<Q>>("POST", "/v1/systemone", {
+    return this.#request<DecisionsResult<Q>>("POST", "/v1/decisions", {
       ...options,
       body,
     });
@@ -353,18 +358,18 @@ export class TypeSafeClient {
     const headers = mergeHeaders(req.headers, {
       Authorization: `Bearer ${this.#apiKey}`,
       Accept: "application/json",
-      "User-Agent": `typesafe-sdk/${VERSION}`,
-      "X-TypeSafe-SDK": `typesafe-sdk/${VERSION}`,
-      "X-TypeSafe-Runtime": RUNTIME,
+      "User-Agent": `rune-sdk/${VERSION}`,
+      "X-Rune-SDK": `rune-sdk/${VERSION}`,
+      "X-Rune-Runtime": RUNTIME,
       "Content-Type": req.body === undefined ? undefined : "application/json",
-      "X-TypeSafe-Retry-Count": undefined,
+      "X-Rune-Retry-Count": undefined,
     });
     const body = req.body === undefined ? undefined : JSON.stringify(req.body);
 
     for (let attempt = 0; ; attempt++) {
       const retriesLeft = req.retry.maxRetries - attempt;
       const attemptHeaders =
-        attempt === 0 ? headers : { ...headers, "X-TypeSafe-Retry-Count": String(attempt) };
+        attempt === 0 ? headers : { ...headers, "X-Rune-Retry-Count": String(attempt) };
       this.logger.debug(`${tag} -> ${url}`, {
         headers: redactHeaders(attemptHeaders),
         body: req.body,
