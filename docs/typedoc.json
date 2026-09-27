@@ -4,7 +4,7 @@
   "plugin": ["typedoc-plugin-markdown"],
   "out": "../build/docs",
   "readme": "none",
-  "name": "Invergent Rune JavaScript SDK",
+  "name": "Surogate Rune JavaScript SDK",
   "excludePrivate": true,
   "excludeProtected": true,
   "excludeInternal": true,

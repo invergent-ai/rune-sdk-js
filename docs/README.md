@@ -1,4 +1,4 @@
-# Invergent Rune API reference
+# Surogate Rune API reference
 
 From the SDK source checkout, run:
 
