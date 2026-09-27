@@ -131,8 +131,8 @@ describeLive("live API", () => {
   });
 
   it("surfaces server-side validation errors readably", async () => {
-    // Rune requires at least two choice options.
-    const malformed = { q: choice("?", { only: "One option" }) };
+    // An empty choice vocabulary cannot produce a decision.
+    const malformed = { q: choice("?", {}) };
     const err = await client.decide({ state: "x", questions: malformed }).catch((e: unknown) => e);
     show("400", { name: (err as Error).name, message: (err as Error).message });
     expect(err).toBeInstanceOf(BadRequestError);

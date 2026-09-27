@@ -403,12 +403,17 @@ describe("wire format", () => {
     expect(wire.q?.criteria).toEqual({ a: "a", b: "b" });
   });
 
+  it("preserves a single score level without adding alternatives", async () => {
+    const wire = await send({ q: score("q", ["only"]) });
+    expect(wire.q?.criteria).toEqual(["only"]);
+  });
+
   it("sends a score list untouched", async () => {
     const wire = await send({ q: score("q", ["bad", "ok", "great"]) });
     expect(wire.q?.criteria).toEqual(["bad", "ok", "great"]);
   });
 
-  it("rejects non-list score criteria, fewer than two criteria, and empty question sets before sending", async () => {
+  it("rejects non-list score criteria, empty score criteria, and empty question sets before sending", async () => {
     const { fetch, requests } = mockFetch(() => json(DECISIONS_RESPONSE));
     const client = new RuneClient({ apiKey: "k", fetch });
     // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed, as a JS caller might send
@@ -419,9 +424,8 @@ describe("wire format", () => {
       'Score question "q" has criteria that are not a list',
     );
     expect(() => bad([])).toThrow(
-      'Score question "q" has 0 criteria; at least two scores are required.',
+      'Score question "q" has 0 criteria; at least one score is required.',
     );
-    expect(() => bad(["only"])).toThrow("at least two scores");
     expect(() => client.decide({ state: "s", questions: {} })).toThrow(
       "At least one question is required",
     );

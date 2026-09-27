@@ -42,7 +42,7 @@ console.log(result.answers.urgency.score);
 
 The default API root is `https://rune.surogate.ai`, the model is `rune-v3`, and `decide()`
 sends `POST /v1/decisions`. Authentication uses `Authorization: Bearer`.
-State can be text, a JSON object or an array. Choice and score questions need 2–255
+State can be text, a JSON object or an array. Choice and score questions need 1–255
 options. Missing choice descriptions use their labels; Noul supplies `true` and `false`
 automatically. Missing score descriptions use their level index, and omitted instructions
 become empty strings. Nested JSON values are preserved; request inputs are not mutated.

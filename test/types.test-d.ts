@@ -153,8 +153,7 @@ describe("criteria shapes", () => {
     score("q", { 0: "bad", 1: "ok" });
     // @ts-expect-error empty lists are not valid rubrics
     score("q", []);
-    // @ts-expect-error a rubric needs at least two levels
-    score("q", ["only"]);
+    expectTypeOf(score("q", ["only"]).criteria).toEqualTypeOf<readonly ["only"]>();
     const dynamic: string[] = ["bad", "ok"];
     // @ts-expect-error a plain string[] may be empty
     score("q", dynamic);

@@ -299,7 +299,7 @@ export class RuneClient {
    * @param request - State, questions, and an optional model override.
    * @param options - Per-call timeout, retry, headers, and cancellation settings.
    * @returns Answers typed by question name and criteria, with model and token usage.
-   * @throws {RuneError} Questions are empty, or score criteria are not a list of at least two entries.
+   * @throws {RuneError} Questions are empty, or score criteria are not a list of at least one entry.
    * @throws {APIError} The server returns a non-2xx response after retries.
    * @throws {APIConnectionError} The request cannot connect or times out after retries.
    * @throws {APIUserAbortError} The caller aborts the request.
